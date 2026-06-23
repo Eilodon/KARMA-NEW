@@ -27,6 +27,22 @@ pub const IDENTITY_POLICY_NONE: u8 = 0;
 pub const IDENTITY_POLICY_T3N: u8 = 1;
 pub const IDENTITY_POLICY_T3N_FRESH: u8 = 2;
 
+// ─── Composition constants (T2.1) ──────────────────────────────────────────
+//
+// A composite skill bundles N child skills with a weights vector (basis points). A composite
+// job's settle splits the escrow across each child's owner + the orchestrator (= composite's
+// owner), per the declared bps. Reputation propagates to children + composite + orchestrator
+// on a successful arm's-length completion.
+
+/// Maximum number of children a composition can bundle. Caps storage reads at settle time so
+/// a deep composition cannot exceed the deploy gas budget. Set conservatively for the
+/// hackathon scope; a v2 with batched settlement could raise this.
+pub const MAX_COMPOSITION_CHILDREN: u32 = 8;
+
+/// Basis-points total. A composite's `weights_bps.sum() + orchestrator_bps` MUST equal this
+/// exactly — no over- or under-allocation. Mirrors EigenLayer's bps-vault convention.
+pub const BPS_TOTAL: u32 = 10_000;
+
 // ─── Errors ────────────────────────────────────────────────────────────────
 #[odra::odra_error]
 pub enum Error {
@@ -54,6 +70,15 @@ pub enum Error {
     NotUnlocking = 22,
     CooldownActive = 23,
     BadReviewWindow = 24,
+    // T2.1 composition errors
+    EmptyComposition = 25,
+    TooManyChildren = 26,
+    WeightsLenMismatch = 27,
+    WeightSumMismatch = 28,
+    ChildSkillInactive = 29,
+    ChildSkillNotFound = 30,
+    NotComposite = 31,
+    IsComposite = 32,
 }
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -82,6 +107,23 @@ pub struct Skill {
     pub registered_at: u64,
     pub min_reputation_to_invoke: u32,
     pub identity_policy: u8,
+}
+
+/// T2.1: composite-skill manifest — the children + bps split that `settle_completion` reads.
+/// Stored in a separate Mapping keyed by composite skill_id; absence ⇒ regular (non-composite)
+/// skill. Keeps `Skill` byte-layout unchanged so this is a clean add for existing storage.
+///
+/// Invariants enforced at `register_composition`:
+///   • `child_skill_ids.len() == weights_bps.len()` and both ∈ [1, MAX_COMPOSITION_CHILDREN]
+///   • `weights_bps.iter().sum::<u32>() + orchestrator_bps == BPS_TOTAL` (exact equality)
+///   • Each child_skill_id exists and is active at registration time. (Children may later
+///     deactivate; settle does not re-check — bps stay declarative, the orchestrator picks
+///     up the consequence in reputation.)
+#[odra::odra_type]
+pub struct Composition {
+    pub child_skill_ids: Vec<u64>,
+    pub weights_bps: Vec<u32>,
+    pub orchestrator_bps: u32,
 }
 
 #[odra::odra_type]
@@ -176,11 +218,27 @@ pub struct BondUpdated {
     pub seed_eligible: U512,
 }
 
+#[odra::event]
+pub struct CompositionRegistered {
+    pub skill_id: u64,
+    pub orchestrator: Address,
+    pub child_count: u32,
+    pub orchestrator_bps: u32,
+}
+
+#[odra::event]
+pub struct CompositePayout {
+    pub job_id: u64,
+    pub recipient: Address,
+    pub amount: U512,
+    pub bps: u32,
+}
+
 // ─── Contract ──────────────────────────────────────────────────────────────
 #[odra::module(events = [
     SkillRegistered, SkillDeactivated, JobCreated, ResultDelivered, JobCompleted,
     JobRefunded, ResultDisputed, MinReputationSet, IdentityPolicySet, Withdrawn,
-    BondUpdated,
+    BondUpdated, CompositionRegistered, CompositePayout,
 ])]
 pub struct AgentSkillRegistry {
     review_window: Var<u64>,
@@ -196,6 +254,8 @@ pub struct AgentSkillRegistry {
     agent_rep: Mapping<Address, u32>,
     bonded_amount: Mapping<Address, U512>,
     bond_unlock_at: Mapping<Address, u64>,
+    /// T2.1: composite manifests. Keyed by composite skill_id; absence ⇒ regular skill.
+    compositions: Mapping<u64, Composition>,
 }
 
 #[odra::module]
@@ -253,6 +313,116 @@ impl AgentSkillRegistry {
             owner,
             name,
             price_per_call,
+        });
+        skill_id
+    }
+
+    /// T2.1: register a composite skill that bundles N existing children with a bps split.
+    /// Creates an ordinary `Skill` (so `discover_skills` / `create_job` / lifecycle work without
+    /// special-casing) and a parallel `Composition` manifest the settle path reads.
+    ///
+    /// Invariants checked here (cheaper than re-checking at settle time):
+    ///   • 1 ≤ child_skill_ids.len() ≤ MAX_COMPOSITION_CHILDREN
+    ///   • child_skill_ids.len() == weights_bps.len()
+    ///   • sum(weights_bps) + orchestrator_bps == BPS_TOTAL  (exact)
+    ///   • Each child skill exists + is active at registration time
+    ///
+    /// The caller becomes the composite's owner = the orchestrator who gets `orchestrator_bps`.
+    /// Children may later deactivate; settle does NOT re-check active-ness — bps stay declarative,
+    /// the orchestrator picks up the reputation consequence if a child stops delivering.
+    pub fn register_composition(
+        &mut self,
+        name: String,
+        description: String,
+        mcp_endpoint: String,
+        price_per_call: U512,
+        min_reputation_to_invoke: u32,
+        identity_policy: u8,
+        child_skill_ids: Vec<u64>,
+        weights_bps: Vec<u32>,
+        orchestrator_bps: u32,
+    ) -> u64 {
+        // ── Composition-specific shape checks (run BEFORE the skill is minted) ──
+        if name.is_empty() {
+            self.env().revert(Error::NameRequired);
+        }
+        if min_reputation_to_invoke > MAX_REPUTATION {
+            self.env().revert(Error::BadThreshold);
+        }
+        let child_count = child_skill_ids.len() as u32;
+        if child_count == 0 {
+            self.env().revert(Error::EmptyComposition);
+        }
+        if child_count > MAX_COMPOSITION_CHILDREN {
+            self.env().revert(Error::TooManyChildren);
+        }
+        if child_skill_ids.len() != weights_bps.len() {
+            self.env().revert(Error::WeightsLenMismatch);
+        }
+        // Sum check: saturating to avoid u32 wrap on a malicious giant weight.
+        let mut bps_sum: u32 = orchestrator_bps;
+        for i in 0..child_count {
+            bps_sum = bps_sum.saturating_add(weights_bps.get(i as usize).copied().unwrap_or(0));
+        }
+        if bps_sum != BPS_TOTAL {
+            self.env().revert(Error::WeightSumMismatch);
+        }
+        // Per-child existence + active check. Also blocks "composite of composite" cycles in v1
+        // (the existence check is the foundation; a future v2 can add a depth guard).
+        for i in 0..child_count {
+            let child_id = child_skill_ids.get(i as usize).copied().unwrap_or(0);
+            let child = self
+                .skills
+                .get(&child_id)
+                .unwrap_or_else(|| self.env().revert(Error::ChildSkillNotFound));
+            if !child.active {
+                self.env().revert(Error::ChildSkillInactive);
+            }
+        }
+
+        // ── Mint the underlying Skill (orchestrator = self.env().caller()) ──
+        let skill_id = self.skill_id_counter.get_or_default() + 1;
+        self.skill_id_counter.set(skill_id);
+        let owner = self.env().caller();
+        let now = self.env().get_block_time();
+        let skill = Skill {
+            owner,
+            name: name.clone(),
+            description,
+            mcp_endpoint,
+            price_per_call,
+            reputation_score: BASE_REPUTATION,
+            total_invocations: 0,
+            active: true,
+            registered_at: now,
+            min_reputation_to_invoke,
+            identity_policy,
+        };
+        self.skills.set(&skill_id, skill);
+
+        let mut owned = self.agent_skills.get(&owner).unwrap_or_default();
+        owned.push(skill_id);
+        self.agent_skills.set(&owner, owned);
+
+        // ── Persist the composition manifest under the same id ──
+        let composition = Composition {
+            child_skill_ids,
+            weights_bps,
+            orchestrator_bps,
+        };
+        self.compositions.set(&skill_id, composition);
+
+        self.env().emit_event(SkillRegistered {
+            skill_id,
+            owner,
+            name,
+            price_per_call,
+        });
+        self.env().emit_event(CompositionRegistered {
+            skill_id,
+            orchestrator: owner,
+            child_count,
+            orchestrator_bps,
         });
         skill_id
     }
@@ -591,6 +761,17 @@ impl AgentSkillRegistry {
     pub fn bond_unlock_at_of(&self, agent: Address) -> u64 {
         self.bond_unlock_at.get(&agent).unwrap_or(0)
     }
+
+    // ── T2.1 composition views ─────────────────────────────────────────────
+    pub fn is_composite(&self, skill_id: u64) -> bool {
+        self.compositions.get(&skill_id).is_some()
+    }
+
+    pub fn get_composition(&self, skill_id: u64) -> Composition {
+        self.compositions
+            .get(&skill_id)
+            .unwrap_or_else(|| self.env().revert(Error::NotComposite))
+    }
 }
 
 // Private helpers — `#[odra::module]` impl block above only carries the public surface.
@@ -617,9 +798,23 @@ impl AgentSkillRegistry {
     /// ledger writes (no external call). Self-deal guard widened from Solidity audit Abductive-2 +
     /// Tier-0: when `requester == provider`, escrow still settles, but NONE of the trust signals
     /// (skill rep, totalInvocations, requester rep, provider rep) move.
+    ///
+    /// T2.1: composite-skill aware. If the job's skill is a registered composition, the escrow
+    /// splits across each child's owner + the orchestrator per the declared bps; reputation
+    /// propagates to the composite, each child skill, each child owner, and the orchestrator
+    /// (anti-self-deal: a recipient that is also the requester gets the payout but no rep).
     fn settle_completion(&mut self, j: &mut Job, job_id: u64) {
         j.status = JobStatus::Completed;
         j.completed_at = self.env().get_block_time();
+
+        match self.compositions.get(&j.skill_id) {
+            None => self.settle_simple(j, job_id),
+            Some(comp) => self.settle_composite(j, job_id, comp),
+        }
+    }
+
+    /// Original Solidity-mirror settlement: full escrow to provider, single bump per side.
+    fn settle_simple(&mut self, j: &Job, job_id: u64) {
         let credit =
             self.pending_withdrawals.get(&j.provider).unwrap_or_default() + j.escrow_amount;
         self.pending_withdrawals.set(&j.provider, credit);
@@ -639,6 +834,90 @@ impl AgentSkillRegistry {
             provider: j.provider,
             payout: j.escrow_amount,
             new_reputation: s.reputation_score,
+        });
+    }
+
+    /// T2.1: split escrow + reputation across the composition. CEI: all ledger writes only.
+    ///
+    /// Payment loop:
+    ///   • For each child i: pending_withdrawals[child_i.owner] += escrow × weights_bps[i] / BPS_TOTAL
+    ///   • pending_withdrawals[orchestrator] += escrow × orchestrator_bps / BPS_TOTAL
+    /// The bps sum was validated at registration to equal BPS_TOTAL exactly, so the total payouts
+    /// sum to the escrow amount (modulo integer-division dust at the last decimal — accepted as
+    /// 1-2 mote rounding loss per settle).
+    ///
+    /// Reputation loop (anti-self-deal: skip a bump when recipient == requester):
+    ///   • Bump composite skill's score + orchestrator (= composite owner) agent rep
+    ///   • For each child skill: bump score + total_invocations
+    ///   • For each child owner: bump agent rep
+    fn settle_composite(&mut self, j: &Job, job_id: u64, comp: Composition) {
+        let escrow = j.escrow_amount;
+        let bps_total = U512::from(BPS_TOTAL);
+
+        // ── Payment split — children first, orchestrator last (the orchestrator gets whatever
+        //    remains so the rounding-dust always lands with the composite operator, not lost). ──
+        let mut paid_to_children = U512::zero();
+        let n = comp.child_skill_ids.len() as u32;
+        for i in 0..n {
+            let child_id = comp.child_skill_ids.get(i as usize).copied().unwrap_or(0);
+            let bps = comp.weights_bps.get(i as usize).copied().unwrap_or(0);
+            // U512 integer-divide preserves the bps semantics without float drift.
+            let share = escrow * U512::from(bps) / bps_total;
+            let child = self.require_skill(child_id);
+            let pending = self.pending_withdrawals.get(&child.owner).unwrap_or_default() + share;
+            self.pending_withdrawals.set(&child.owner, pending);
+            paid_to_children += share;
+            self.env().emit_event(CompositePayout {
+                job_id,
+                recipient: child.owner,
+                amount: share,
+                bps,
+            });
+        }
+        // Orchestrator (composite owner) gets the remainder — declared bps + any rounding dust.
+        // This is == j.provider (the composite skill's owner field, populated at registration).
+        let orchestrator_share = escrow - paid_to_children;
+        let pending_orch = self.pending_withdrawals.get(&j.provider).unwrap_or_default()
+            + orchestrator_share;
+        self.pending_withdrawals.set(&j.provider, pending_orch);
+        self.env().emit_event(CompositePayout {
+            job_id,
+            recipient: j.provider,
+            amount: orchestrator_share,
+            bps: comp.orchestrator_bps,
+        });
+
+        // ── Reputation split — composite + all children + per-agent. Anti-self-deal:
+        //    a recipient that IS the requester gets the payout but NOT the rep bump. ──
+        let mut composite = self.require_skill(j.skill_id);
+        if j.provider != j.requester {
+            composite.total_invocations += 1;
+            let next = composite.reputation_score.saturating_add(REPUTATION_STEP);
+            composite.reputation_score = if next > MAX_REPUTATION { MAX_REPUTATION } else { next };
+            self.skills.set(&j.skill_id, composite.clone());
+            self.bump_agent_rep(j.provider);
+            self.bump_agent_rep(j.requester);
+        }
+        for i in 0..n {
+            let child_id = comp.child_skill_ids.get(i as usize).copied().unwrap_or(0);
+            let mut child = self.require_skill(child_id);
+            // Same self-deal guard: if the child's owner is the requester, no rep movement on
+            // that child (skill score + agent rep both held). Composite-on-self still works
+            // for payment but contributes nothing to the trust graph.
+            if child.owner != j.requester {
+                child.total_invocations += 1;
+                let next = child.reputation_score.saturating_add(REPUTATION_STEP);
+                child.reputation_score = if next > MAX_REPUTATION { MAX_REPUTATION } else { next };
+                self.skills.set(&child_id, child.clone());
+                self.bump_agent_rep(child.owner);
+            }
+        }
+
+        self.env().emit_event(JobCompleted {
+            job_id,
+            provider: j.provider,
+            payout: escrow,
+            new_reputation: composite.reputation_score,
         });
     }
 }

@@ -528,3 +528,396 @@ fn bond_request_unlock_without_bond_reverts() {
     env.set_caller(beta);
     assert_eq!(reg.try_request_bond_unlock(), Err(Error::NoBond.into()));
 }
+
+// ─── T2.1 — Skill composition (composite skills, bps split, propagated reputation) ──
+
+const COMP_PRICE: u64 = 4_000_000;
+
+/// Convenience: helper registers two children + one composite (50/40/10) with `setup()` accounts.
+/// Returns (env, contract, requester, orchestrator, child_a_owner, child_b_owner, ids).
+fn setup_with_composite() -> (
+    HostEnv, AgentSkillRegistryHostRef, Address, Address, Address, Address, u64, u64, u64,
+) {
+    let env = odra_test::env();
+    let init_args = AgentSkillRegistryInitArgs { review_window_ms: DEFAULT_REVIEW_WINDOW };
+    let mut reg = AgentSkillRegistry::deploy(&env, init_args);
+
+    let child_a_owner = env.get_account(1);
+    let child_b_owner = env.get_account(2);
+    let orchestrator = env.get_account(3);
+    let requester = env.get_account(4);
+
+    env.set_caller(child_a_owner);
+    let child_a = reg.register_skill(
+        "summarize".to_string(),
+        "summarize a document".to_string(),
+        "mcp://a".to_string(),
+        U512::from(PRICE),
+        0,
+        IDENTITY_POLICY_NONE,
+    );
+    env.set_caller(child_b_owner);
+    let child_b = reg.register_skill(
+        "translate".to_string(),
+        "translate text".to_string(),
+        "mcp://b".to_string(),
+        U512::from(PRICE),
+        0,
+        IDENTITY_POLICY_NONE,
+    );
+
+    // Composite at price COMP_PRICE: 50% to child_a, 40% to child_b, 10% orchestrator.
+    env.set_caller(orchestrator);
+    let composite = reg.register_composition(
+        "summarize+translate".to_string(),
+        "compose summarize then translate".to_string(),
+        "mcp://composite".to_string(),
+        U512::from(COMP_PRICE),
+        0,
+        IDENTITY_POLICY_NONE,
+        vec![child_a, child_b],
+        vec![5000, 4000],
+        1000,
+    );
+
+    (env, reg, requester, orchestrator, child_a_owner, child_b_owner, child_a, child_b, composite)
+}
+
+#[test]
+fn composition_register_persists_manifest_and_underlying_skill() {
+    let (_env, reg, _, orchestrator, _, _, ca, cb, composite) = setup_with_composite();
+    assert!(reg.is_composite(composite), "is_composite=true for the composite");
+    assert!(!reg.is_composite(ca), "child A is not composite");
+    assert!(!reg.is_composite(cb), "child B is not composite");
+
+    let comp = reg.get_composition(composite);
+    assert_eq!(comp.child_skill_ids, vec![ca, cb]);
+    assert_eq!(comp.weights_bps, vec![5000u32, 4000u32]);
+    assert_eq!(comp.orchestrator_bps, 1000u32);
+
+    let s = reg.get_skill(composite);
+    assert_eq!(s.owner, orchestrator, "composite's owner = orchestrator");
+    assert_eq!(s.price_per_call, U512::from(COMP_PRICE));
+    assert!(s.active);
+}
+
+#[test]
+fn composition_empty_children_reverts() {
+    let env = odra_test::env();
+    let mut reg = AgentSkillRegistry::deploy(&env, AgentSkillRegistryInitArgs {
+        review_window_ms: DEFAULT_REVIEW_WINDOW,
+    });
+    env.set_caller(env.get_account(1));
+    let err = reg.try_register_composition(
+        "x".to_string(), "y".to_string(), "z".to_string(),
+        U512::from(PRICE), 0, IDENTITY_POLICY_NONE,
+        vec![], vec![], 10_000,
+    );
+    assert_eq!(err, Err(Error::EmptyComposition.into()));
+}
+
+#[test]
+fn composition_weight_sum_mismatch_reverts() {
+    let env = odra_test::env();
+    let mut reg = AgentSkillRegistry::deploy(&env, AgentSkillRegistryInitArgs {
+        review_window_ms: DEFAULT_REVIEW_WINDOW,
+    });
+    let owner_a = env.get_account(1);
+    env.set_caller(owner_a);
+    let child = reg.register_skill(
+        "x".into(), "y".into(), "z".into(),
+        U512::from(PRICE), 0, IDENTITY_POLICY_NONE,
+    );
+    env.set_caller(env.get_account(2));
+    // 5000 + 5000 + 1000 = 11_000 — over BPS_TOTAL.
+    let err = reg.try_register_composition(
+        "comp".into(), "y".into(), "z".into(),
+        U512::from(COMP_PRICE), 0, IDENTITY_POLICY_NONE,
+        vec![child, child], vec![5000, 5000], 1000,
+    );
+    assert_eq!(err, Err(Error::WeightSumMismatch.into()));
+}
+
+#[test]
+fn composition_weights_len_mismatch_reverts() {
+    let env = odra_test::env();
+    let mut reg = AgentSkillRegistry::deploy(&env, AgentSkillRegistryInitArgs {
+        review_window_ms: DEFAULT_REVIEW_WINDOW,
+    });
+    let owner_a = env.get_account(1);
+    env.set_caller(owner_a);
+    let child = reg.register_skill(
+        "x".into(), "y".into(), "z".into(),
+        U512::from(PRICE), 0, IDENTITY_POLICY_NONE,
+    );
+    env.set_caller(env.get_account(2));
+    // 2 children but 3 weight slots.
+    let err = reg.try_register_composition(
+        "comp".into(), "y".into(), "z".into(),
+        U512::from(COMP_PRICE), 0, IDENTITY_POLICY_NONE,
+        vec![child, child], vec![3000, 3000, 3000], 1000,
+    );
+    assert_eq!(err, Err(Error::WeightsLenMismatch.into()));
+}
+
+#[test]
+fn composition_too_many_children_reverts() {
+    let env = odra_test::env();
+    let mut reg = AgentSkillRegistry::deploy(&env, AgentSkillRegistryInitArgs {
+        review_window_ms: DEFAULT_REVIEW_WINDOW,
+    });
+    let owner_a = env.get_account(1);
+    env.set_caller(owner_a);
+    // 9 distinct skills + a composite would exceed MAX_COMPOSITION_CHILDREN=8.
+    let mut ids = Vec::new();
+    for i in 0..(MAX_COMPOSITION_CHILDREN + 1) {
+        env.set_caller(owner_a);
+        ids.push(reg.register_skill(
+            format!("s{}", i), "y".into(), "z".into(),
+            U512::from(PRICE), 0, IDENTITY_POLICY_NONE,
+        ));
+    }
+    let mut weights = vec![1000u32; (MAX_COMPOSITION_CHILDREN + 1) as usize];
+    // Won't even reach the sum check — too-many fires first.
+    let _ = &mut weights;
+    env.set_caller(env.get_account(2));
+    let err = reg.try_register_composition(
+        "comp".into(), "y".into(), "z".into(),
+        U512::from(COMP_PRICE), 0, IDENTITY_POLICY_NONE,
+        ids, weights, 1000,
+    );
+    assert_eq!(err, Err(Error::TooManyChildren.into()));
+}
+
+#[test]
+fn composition_unknown_child_reverts() {
+    let env = odra_test::env();
+    let mut reg = AgentSkillRegistry::deploy(&env, AgentSkillRegistryInitArgs {
+        review_window_ms: DEFAULT_REVIEW_WINDOW,
+    });
+    env.set_caller(env.get_account(2));
+    let err = reg.try_register_composition(
+        "comp".into(), "y".into(), "z".into(),
+        U512::from(COMP_PRICE), 0, IDENTITY_POLICY_NONE,
+        vec![9999u64], vec![9000], 1000,
+    );
+    assert_eq!(err, Err(Error::ChildSkillNotFound.into()));
+}
+
+#[test]
+fn composition_inactive_child_reverts() {
+    let env = odra_test::env();
+    let mut reg = AgentSkillRegistry::deploy(&env, AgentSkillRegistryInitArgs {
+        review_window_ms: DEFAULT_REVIEW_WINDOW,
+    });
+    let owner_a = env.get_account(1);
+    env.set_caller(owner_a);
+    let child = reg.register_skill(
+        "x".into(), "y".into(), "z".into(),
+        U512::from(PRICE), 0, IDENTITY_POLICY_NONE,
+    );
+    env.set_caller(owner_a);
+    reg.deactivate_skill(child);
+    env.set_caller(env.get_account(2));
+    let err = reg.try_register_composition(
+        "comp".into(), "y".into(), "z".into(),
+        U512::from(COMP_PRICE), 0, IDENTITY_POLICY_NONE,
+        vec![child], vec![9000], 1000,
+    );
+    assert_eq!(err, Err(Error::ChildSkillInactive.into()));
+}
+
+#[test]
+fn composite_create_job_escrows_at_composite_price() {
+    let (env, mut reg, requester, _orch, _, _, _, _, composite) = setup_with_composite();
+    env.set_caller(requester);
+    let job_id = reg.with_tokens(U512::from(COMP_PRICE)).create_job(
+        composite,
+        task_hash("c1"),
+        DEADLINE_MS,
+    );
+    let j = reg.get_job(job_id);
+    assert_eq!(j.escrow_amount, U512::from(COMP_PRICE));
+    assert_eq!(j.skill_id, composite);
+    assert_eq!(j.status, JobStatus::Open);
+}
+
+#[test]
+fn composite_settle_splits_escrow_per_bps_and_dust_to_orchestrator() {
+    let (env, mut reg, requester, orchestrator, child_a_owner, child_b_owner, _, _, composite) =
+        setup_with_composite();
+    env.set_caller(requester);
+    let job_id = reg.with_tokens(U512::from(COMP_PRICE)).create_job(
+        composite, task_hash("split-1"), DEADLINE_MS,
+    );
+    env.set_caller(orchestrator);
+    reg.deliver_result(job_id, task_hash("ok"));
+    env.set_caller(requester);
+    reg.confirm_completion(job_id);
+
+    // 4_000_000 × 5000 / 10000 = 2_000_000 to child_a_owner
+    // 4_000_000 × 4000 / 10000 = 1_600_000 to child_b_owner
+    // remainder = 400_000 to orchestrator (declared 1000 bps = 400_000 — no dust this run)
+    assert_eq!(reg.pending_withdrawals_of(child_a_owner), U512::from(2_000_000u64), "child A share");
+    assert_eq!(reg.pending_withdrawals_of(child_b_owner), U512::from(1_600_000u64), "child B share");
+    assert_eq!(reg.pending_withdrawals_of(orchestrator), U512::from(400_000u64), "orchestrator share");
+}
+
+#[test]
+fn composite_settle_dust_lands_with_orchestrator_not_lost() {
+    let env = odra_test::env();
+    let mut reg = AgentSkillRegistry::deploy(&env, AgentSkillRegistryInitArgs {
+        review_window_ms: DEFAULT_REVIEW_WINDOW,
+    });
+    let oa = env.get_account(1);
+    let ob = env.get_account(2);
+    let orch = env.get_account(3);
+    let req = env.get_account(4);
+
+    env.set_caller(oa);
+    let ca = reg.register_skill("a".into(), "x".into(), "x".into(),
+        U512::from(PRICE), 0, IDENTITY_POLICY_NONE);
+    env.set_caller(ob);
+    let cb = reg.register_skill("b".into(), "x".into(), "x".into(),
+        U512::from(PRICE), 0, IDENTITY_POLICY_NONE);
+
+    // Use price = 7 motes to FORCE rounding dust (7 × 3333 / 10000 = 2, not 2.333…).
+    // 3333 + 3333 + 3334 = 10000. Children get 2 each, orchestrator gets 7 - 4 = 3.
+    env.set_caller(orch);
+    let composite = reg.register_composition(
+        "c".into(), "x".into(), "x".into(),
+        U512::from(7u64), 0, IDENTITY_POLICY_NONE,
+        vec![ca, cb], vec![3333, 3333], 3334,
+    );
+    env.set_caller(req);
+    let job_id = reg.with_tokens(U512::from(7u64)).create_job(composite, task_hash("d"), DEADLINE_MS);
+    env.set_caller(orch);
+    reg.deliver_result(job_id, task_hash("ok"));
+    env.set_caller(req);
+    reg.confirm_completion(job_id);
+
+    assert_eq!(reg.pending_withdrawals_of(oa), U512::from(2u64), "child A: 7 × 3333 / 10000 = 2");
+    assert_eq!(reg.pending_withdrawals_of(ob), U512::from(2u64), "child B: same");
+    // Orchestrator gets the remainder = 7 - 2 - 2 = 3 (their share AND the dust).
+    assert_eq!(reg.pending_withdrawals_of(orch), U512::from(3u64), "orchestrator gets remainder, no mote lost");
+    // Sanity: total payouts == escrow.
+    let total = reg.pending_withdrawals_of(oa) + reg.pending_withdrawals_of(ob) + reg.pending_withdrawals_of(orch);
+    assert_eq!(total, U512::from(7u64), "no mote lost in the split");
+}
+
+#[test]
+fn composite_settle_propagates_reputation_to_children_and_composite() {
+    let (env, mut reg, requester, orchestrator, child_a_owner, child_b_owner, ca, cb, composite) =
+        setup_with_composite();
+    let base_orch = reg.agent_reputation(orchestrator);
+    let base_req = reg.agent_reputation(requester);
+    let base_ca_owner = reg.agent_reputation(child_a_owner);
+    let base_cb_owner = reg.agent_reputation(child_b_owner);
+
+    env.set_caller(requester);
+    let job_id = reg.with_tokens(U512::from(COMP_PRICE)).create_job(
+        composite, task_hash("rep-1"), DEADLINE_MS,
+    );
+    env.set_caller(orchestrator);
+    reg.deliver_result(job_id, task_hash("ok"));
+    env.set_caller(requester);
+    reg.confirm_completion(job_id);
+
+    // Composite + every child skill score bumped by REPUTATION_STEP.
+    assert_eq!(reg.get_skill(composite).reputation_score, BASE_REPUTATION + REPUTATION_STEP, "composite bumped");
+    assert_eq!(reg.get_skill(ca).reputation_score, BASE_REPUTATION + REPUTATION_STEP, "child A bumped");
+    assert_eq!(reg.get_skill(cb).reputation_score, BASE_REPUTATION + REPUTATION_STEP, "child B bumped");
+    // Agent rep for orchestrator + requester + each child owner bumped (anti-self-deal off here).
+    assert_eq!(reg.agent_reputation(orchestrator), base_orch + REPUTATION_STEP);
+    assert_eq!(reg.agent_reputation(requester), base_req + REPUTATION_STEP);
+    assert_eq!(reg.agent_reputation(child_a_owner), base_ca_owner + REPUTATION_STEP);
+    assert_eq!(reg.agent_reputation(child_b_owner), base_cb_owner + REPUTATION_STEP);
+}
+
+#[test]
+fn composite_settle_self_deal_pays_but_no_reputation_for_self() {
+    // Composite where one CHILD's owner is the requester: that child gets PAID but no rep.
+    // The other child + composite still get rep (arm's length).
+    let env = odra_test::env();
+    let mut reg = AgentSkillRegistry::deploy(&env, AgentSkillRegistryInitArgs {
+        review_window_ms: DEFAULT_REVIEW_WINDOW,
+    });
+    let req = env.get_account(1);
+    let arms_length = env.get_account(2);
+    let orch = env.get_account(3);
+    // Child A owner = the requester (self-deal target).
+    env.set_caller(req);
+    let ca = reg.register_skill("a".into(), "x".into(), "x".into(),
+        U512::from(PRICE), 0, IDENTITY_POLICY_NONE);
+    env.set_caller(arms_length);
+    let cb = reg.register_skill("b".into(), "x".into(), "x".into(),
+        U512::from(PRICE), 0, IDENTITY_POLICY_NONE);
+    env.set_caller(orch);
+    let composite = reg.register_composition(
+        "c".into(), "x".into(), "x".into(),
+        U512::from(COMP_PRICE), 0, IDENTITY_POLICY_NONE,
+        vec![ca, cb], vec![5000, 4000], 1000,
+    );
+
+    let base_ca = reg.get_skill(ca).reputation_score;
+    let base_cb = reg.get_skill(cb).reputation_score;
+    let base_req = reg.agent_reputation(req);
+    let base_arms = reg.agent_reputation(arms_length);
+
+    env.set_caller(req);
+    let job_id = reg.with_tokens(U512::from(COMP_PRICE)).create_job(
+        composite, task_hash("self"), DEADLINE_MS,
+    );
+    env.set_caller(orch);
+    reg.deliver_result(job_id, task_hash("ok"));
+    env.set_caller(req);
+    reg.confirm_completion(job_id);
+
+    // Payment: child A (= requester) still gets paid; arm's-length child B too; orchestrator too.
+    assert_eq!(reg.pending_withdrawals_of(req), U512::from(2_000_000u64), "child A paid (self-deal NOT a payment guard)");
+    assert_eq!(reg.pending_withdrawals_of(arms_length), U512::from(1_600_000u64));
+    assert_eq!(reg.pending_withdrawals_of(orch), U512::from(400_000u64));
+
+    // Reputation: child A NOT bumped (self-deal blocks rep). Child B bumped. Composite bumped.
+    assert_eq!(reg.get_skill(ca).reputation_score, base_ca, "child A rep frozen (self-deal)");
+    assert_eq!(reg.get_skill(cb).reputation_score, base_cb + REPUTATION_STEP, "child B (arm's length) bumped");
+    assert_eq!(reg.get_skill(composite).reputation_score, BASE_REPUTATION + REPUTATION_STEP, "composite bumped");
+    // Agent rep: requester gets the composite-level bump (arm's length to orchestrator),
+    // arms_length child owner gets a bump, child A owner (= requester) NO extra child-side bump
+    // (the composite already gave req a bump — net effect is one step, not two).
+    assert_eq!(reg.agent_reputation(req), base_req + REPUTATION_STEP, "requester: one bump from composite layer");
+    assert_eq!(reg.agent_reputation(arms_length), base_arms + REPUTATION_STEP);
+}
+
+#[test]
+fn composite_dispute_path_refunds_full_escrow_to_requester() {
+    let (env, mut reg, requester, orchestrator, child_a_owner, child_b_owner, _, _, composite) =
+        setup_with_composite();
+    env.set_caller(requester);
+    let job_id = reg.with_tokens(U512::from(COMP_PRICE)).create_job(
+        composite, task_hash("disp-1"), DEADLINE_MS,
+    );
+    env.set_caller(orchestrator);
+    reg.deliver_result(job_id, task_hash("bad"));
+    env.set_caller(requester);
+    reg.dispute_result(job_id);
+
+    // Full refund to requester; NO children + orchestrator paid.
+    assert_eq!(reg.pending_withdrawals_of(requester), U512::from(COMP_PRICE), "full escrow refunded");
+    assert_eq!(reg.pending_withdrawals_of(child_a_owner), U512::zero());
+    assert_eq!(reg.pending_withdrawals_of(child_b_owner), U512::zero());
+    assert_eq!(reg.pending_withdrawals_of(orchestrator), U512::zero());
+}
+
+#[test]
+fn get_composition_for_regular_skill_reverts() {
+    let (env, reg, _, _) = setup();
+    env.set_caller(env.get_account(1));
+    // Register a plain skill, then ask for its composition.
+    // The contract is fresh here; use setup() helper which uses a different deploy.
+    // Reuse setup_with_composite minus composition:
+    let (_env, reg2, _, _, _, _, ca, _, _) = setup_with_composite();
+    let err = reg2.try_get_composition(ca);
+    assert_eq!(err, Err(Error::NotComposite.into()));
+    let _ = (reg, env); // silence unused
+}
