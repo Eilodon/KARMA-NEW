@@ -104,6 +104,91 @@ fn get_job_returns_none_for_unknown() {
     assert!(client.get_job(&7u64).is_none());
 }
 
+// ── T1.1 ReputationAggregationProof entry points ────────────────────────────
+//
+// Same fixture story as create_job above — the full happy-path "verify a real Groth16 proof"
+// test waits on the snarkjs→Arkworks-canonical converter. These tests pin the access-control,
+// storage layout, and replay-guard semantics of the new entry points without depending on
+// crypto artifacts.
+
+#[test]
+fn has_aggregation_vkey_defaults_false() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, client) = boot(&env);
+    assert!(!client.has_aggregation_vkey());
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")] // InvalidVerifyingKey
+fn set_aggregation_vkey_rejects_garbage() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, client) = boot(&env);
+    client.set_aggregation_vkey(&Bytes::from_array(&env, &[0u8; 4])); // too small for vkey
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")] // InvalidVerifyingKey — no vkey set yet
+fn submit_aggregation_rejects_when_no_vkey_set() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, client) = boot(&env);
+    let payer = Address::generate(&env);
+    let null = BytesN::<32>::from_array(&env, &[1u8; 32]);
+    let root = BytesN::<32>::from_array(&env, &[2u8; 32]);
+    let inputs: SVec<BytesN<32>> = SVec::from_array(
+        &env,
+        [
+            BytesN::<32>::from_array(&env, &[0u8; 32]), // min_total
+            BytesN::<32>::from_array(&env, &[0u8; 32]), // min_distinct_categories
+            BytesN::<32>::from_array(&env, &[0u8; 32]), // min_jobs
+            null,                                        // nullifier
+            root,                                        // epoch_root
+        ],
+    );
+    client.submit_aggregation_credential(&payer, &Bytes::new(&env), &inputs);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #8)")] // InvalidPublicInputs — wrong length
+fn submit_aggregation_rejects_wrong_input_count() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, client) = boot(&env);
+    let payer = Address::generate(&env);
+    // Only 4 inputs (should be 5) — the layout check fires before any vkey use, so we don't
+    // even need to set a vkey for this test.
+    let inputs: SVec<BytesN<32>> = SVec::from_array(
+        &env,
+        [
+            BytesN::<32>::from_array(&env, &[0u8; 32]),
+            BytesN::<32>::from_array(&env, &[0u8; 32]),
+            BytesN::<32>::from_array(&env, &[0u8; 32]),
+            BytesN::<32>::from_array(&env, &[1u8; 32]),
+        ],
+    );
+    client.submit_aggregation_credential(&payer, &Bytes::new(&env), &inputs);
+}
+
+#[test]
+fn is_aggregation_nullifier_used_defaults_false() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, client) = boot(&env);
+    let null = BytesN::<32>::from_array(&env, &[9u8; 32]);
+    assert!(!client.is_aggregation_nullifier_used(&null));
+}
+
+#[test]
+fn get_aggregation_credential_returns_none_for_unknown_nullifier() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_admin, client) = boot(&env);
+    let null = BytesN::<32>::from_array(&env, &[7u8; 32]);
+    assert!(client.get_aggregation_credential(&null).is_none());
+}
+
 // Note: the full happy-path test (constructor → register_skill with a real Groth16 vkey →
 // create_job with a real proof) is gated behind `#[cfg(feature = "groth16_fixtures")]` and
 // will be enabled by T8 once the snarkjs→Arkworks-canonical converter is wired. Until then,

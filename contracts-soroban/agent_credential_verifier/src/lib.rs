@@ -68,6 +68,24 @@ enum DataKey {
     Skill(u64),
     Nullifier(BytesN<32>),
     Job(u64),
+    // T1.1 ReputationAggregationProof — admin-set verifying-key + per-epoch claims.
+    AggregationVkey,
+    AggregationNullifier(BytesN<32>),
+    AggregationCredential(BytesN<32>),
+}
+
+/// T1.1: stored "credential" written by a verified ReputationAggregationProof submission.
+/// `nullifier` is the per-epoch replay key; the tuple captures the thresholds an agent
+/// publicly committed to — skills can gate on (>= minTotal, >= minDistinctCategories,
+/// >= minJobs) at the SAME epochRoot. Nothing private about the agent is stored on-chain.
+#[contracttype]
+#[derive(Clone)]
+pub struct AggregationCredential {
+    pub min_total: u64,
+    pub min_distinct_categories: u32,
+    pub min_jobs: u32,
+    pub epoch_root: BytesN<32>,
+    pub submitted_at: u64,
 }
 
 // ── Events ──────────────────────────────────────────────────────────────────
@@ -83,6 +101,11 @@ fn event_skill_registered(env: &Env, skill_id: u64, owner: &Address) {
 fn event_job_created(env: &Env, job_id: u64, skill_id: u64, payer: &Address) {
     env.events()
         .publish((Symbol::new(env, "job_created"), job_id, skill_id), payer.clone());
+}
+#[allow(deprecated)]
+fn event_aggregation_submitted(env: &Env, payer: &Address, nullifier: &BytesN<32>) {
+    env.events()
+        .publish((Symbol::new(env, "agg_submitted"),), (payer.clone(), nullifier.clone()));
 }
 
 // ── Contract impl ───────────────────────────────────────────────────────────
@@ -223,6 +246,91 @@ impl AgentCredentialVerifier {
     pub fn admin(env: Env) -> Option<Address> {
         env.storage().instance().get(&DataKey::Admin)
     }
+
+    // ── T1.1 ReputationAggregationProof — admin-set vkey + per-epoch credentials ──
+
+    /// Admin-only: install the ReputationAggregationProof verifying key. Replaces any prior
+    /// vkey (re-keying is sometimes needed for a v2 circuit; per-epoch nullifiers stay valid
+    /// across vkey rotations since they're indexed by nullifier bytes, not by vkey).
+    pub fn set_aggregation_vkey(env: Env, vkey: Bytes) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .unwrap_or_else(|| panic_with_error!(&env, Error::NotAdmin));
+        admin.require_auth();
+        crypto::deserialize_vkey(&vkey).unwrap_or_else(|_| panic_with_error!(&env, Error::InvalidVerifyingKey));
+        env.storage().instance().set(&DataKey::AggregationVkey, &vkey);
+    }
+
+    /// Submit a ReputationAggregationProof. The 5 public inputs MUST be the vector the
+    /// `reputation_aggregation.circom` produces, in this exact order:
+    ///   [ minTotal, minDistinctCategories, minJobs, nullifier, epochRoot ]
+    /// On a valid proof we store an `AggregationCredential` keyed by `nullifier` so any
+    /// downstream skill can gate on `(threshold, epochRoot)` via `get_aggregation_credential`.
+    /// The nullifier is one-shot per epoch — a second submit with the same nullifier reverts.
+    pub fn submit_aggregation_credential(
+        env: Env,
+        payer: Address,
+        proof: Bytes,
+        public_inputs: Vec<BytesN<32>>,
+    ) -> BytesN<32> {
+        payer.require_auth();
+
+        // 1. Layout check — circuit always emits exactly 5 public signals.
+        if public_inputs.len() != 5 {
+            panic_with_error!(&env, Error::InvalidPublicInputs);
+        }
+        let pi_min_total = public_inputs.get(0).unwrap();
+        let pi_min_distinct = public_inputs.get(1).unwrap();
+        let pi_min_jobs = public_inputs.get(2).unwrap();
+        let nullifier: BytesN<32> = public_inputs.get(3).unwrap();
+        let epoch_root: BytesN<32> = public_inputs.get(4).unwrap();
+
+        // 2. Replay guard — one credential per (secret, epoch).
+        if env.storage().persistent().has(&DataKey::AggregationNullifier(nullifier.clone())) {
+            panic_with_error!(&env, Error::NullifierReused);
+        }
+
+        // 3. Verify proof against the stored aggregation vkey.
+        let vkey: Bytes = env
+            .storage()
+            .instance()
+            .get(&DataKey::AggregationVkey)
+            .unwrap_or_else(|| panic_with_error!(&env, Error::InvalidVerifyingKey));
+        let ok = crypto::verify_groth16(&vkey, &proof, &public_inputs);
+        if !ok {
+            panic_with_error!(&env, Error::InvalidProof);
+        }
+
+        // 4. Effects — claim nullifier, persist credential indexed by it. The credential is
+        //    public on-chain so any other contract (or off-chain consumer) can gate on it.
+        env.storage().persistent().set(&DataKey::AggregationNullifier(nullifier.clone()), &true);
+        env.storage().persistent().set(
+            &DataKey::AggregationCredential(nullifier.clone()),
+            &AggregationCredential {
+                min_total: crypto::bytes32_to_u64(&pi_min_total),
+                min_distinct_categories: crypto::bytes32_to_u32(&pi_min_distinct),
+                min_jobs: crypto::bytes32_to_u32(&pi_min_jobs),
+                epoch_root,
+                submitted_at: env.ledger().timestamp(),
+            },
+        );
+        event_aggregation_submitted(&env, &payer, &nullifier);
+        nullifier
+    }
+
+    pub fn is_aggregation_nullifier_used(env: Env, nullifier: BytesN<32>) -> bool {
+        env.storage().persistent().has(&DataKey::AggregationNullifier(nullifier))
+    }
+
+    pub fn get_aggregation_credential(env: Env, nullifier: BytesN<32>) -> Option<AggregationCredential> {
+        env.storage().persistent().get(&DataKey::AggregationCredential(nullifier))
+    }
+
+    pub fn has_aggregation_vkey(env: Env) -> bool {
+        env.storage().instance().has(&DataKey::AggregationVkey)
+    }
 }
 
 // ── Crypto helpers ──────────────────────────────────────────────────────────
@@ -281,6 +389,24 @@ mod crypto {
         let lo = u32::from_le_bytes(le4);
         let upper_zero = raw[4..32].iter().all(|x| *x == 0);
         lo == v && upper_zero
+    }
+
+    /// Read the lower 8 bytes of a little-endian field-element as a u64. Used to surface a
+    /// public input's numeric value when it has been bit-bounded by the circuit (so the
+    /// upper bytes are zero by construction). Returns 0 on overflow rather than panicking —
+    /// the caller has the option to also enforce equality via `bytes32_equals_u64`.
+    pub(super) fn bytes32_to_u64(b: &BytesN<32>) -> u64 {
+        let raw = bytesn_to_array(b);
+        let mut le8 = [0u8; 8];
+        le8.copy_from_slice(&raw[0..8]);
+        u64::from_le_bytes(le8)
+    }
+
+    pub(super) fn bytes32_to_u32(b: &BytesN<32>) -> u32 {
+        let raw = bytesn_to_array(b);
+        let mut le4 = [0u8; 4];
+        le4.copy_from_slice(&raw[0..4]);
+        u32::from_le_bytes(le4)
     }
 
     fn bytes_to_vec(b: &Bytes) -> StdVec<u8> {

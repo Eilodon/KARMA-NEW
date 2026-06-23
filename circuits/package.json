@@ -7,7 +7,8 @@
   "scripts": {
     "toolchain": "bash scripts/install-toolchain.sh",
     "dummy:test": "node test/dummy_multiplier.test.mjs",
-    "credential:test": "node test/agent_credential.test.mjs"
+    "credential:test": "node test/agent_credential.test.mjs",
+    "rep-agg:test": "NODE_OPTIONS=--max-old-space-size=8192 node test/reputation_aggregation.test.mjs"
   },
   "dependencies": {
     "circomlib": "^2.0.5",
