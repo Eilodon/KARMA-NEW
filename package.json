@@ -24,6 +24,7 @@
     "demo:discover": "tsx src/scripts/discover_demo.ts",
     "demo:verify": "tsx src/scripts/verify_demo.ts",
     "demo:trust-gate": "tsx src/scripts/trust_gate_demo.ts",
+    "demo:evaluator-skill-reference": "tsx src/scripts/evaluator_skill_reference.ts",
     "demo:self-hosting": "tsx src/scripts/demo_self_hosting.ts",
     "demo:cross-chain": "tsx src/scripts/demo_cross_chain.ts",
     "demo:casper": "tsx src/scripts/demo_casper_e2e.ts",

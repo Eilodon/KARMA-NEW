@@ -98,7 +98,7 @@ pnpm dev   # start the MCP server, then call the tool from your MCP client of ch
 **Proof shots:**
 ```bash
 pnpm test:contract   # Foundry — 96/96 AgentSkillRegistry tests (same contract Pharos + X Layer run)
-pnpm test            # Vitest — 907/912 passed, 5 skipped (incl. 23 new X Layer/oracle tests)
+pnpm test            # Vitest — 912/912 passed (incl. 23 new X Layer/oracle tests)
 ```
 
 **X Layer explorer cutaway (once deployed):** `https://www.oklink.com/xlayer-test/address/<XLAYER_CONTRACT_ADDRESS>`
@@ -136,6 +136,5 @@ punish overclaiming more than they punish an honest gap:
 3. Keep real addresses/tx hashes on screen (testnet only, no real-value secrets exposed) —
    authenticity is the point, same as every KARMA demo before this one.
 4. Numbers to state, all current and verifiable at time of writing: **96/96 Foundry tests**
-   (`AgentSkillRegistry.sol`, shared by Pharos + X Layer), **907/912 Vitest** (5 pre-existing
-   skips, unrelated to this pivot), **4 chains** in the reputation kernel (Casper + Stellar live,
-   Pharos live, X Layer adapter built).
+   (`AgentSkillRegistry.sol`, shared by Pharos + X Layer), **912/912 Vitest**, **4 chains** in the
+   reputation kernel (Casper + Stellar live, Pharos live, X Layer adapter built).

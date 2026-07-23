@@ -1,294 +1,260 @@
 # KARMA — Cross-Chain Trust Oracle for OKX.AI
 
-> Built for the **OKX.AI Genesis Hackathon**. (Also has independent Casper/Stellar Testnet
-> deployments predating this hackathon, used here as portability evidence — see
-> [Live deployment](#live-deployment). Casper Buildathon judges: [DEMO_CASPER.md](DEMO_CASPER.md)
-> is the dedicated doc for that submission.)
+[![CI](https://github.com/Eilodon/KARMA-NEW/actions/workflows/ci.yml/badge.svg)](https://github.com/Eilodon/KARMA-NEW/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Eilodon/KARMA-NEW/actions/workflows/codeql.yml/badge.svg)](https://github.com/Eilodon/KARMA-NEW/actions/workflows/codeql.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-**The one-line pitch:** would you pay a stranger agent upfront? Before your agent pays another
-agent on OKX.AI, it can ask KARMA one question — has this agent actually delivered before, and
-where — and get a real, evidence-backed answer instead of a self-reported number.
+> Built for the **OKX.AI Genesis Hackathon**. KARMA also runs live on Casper and Stellar
+> Testnet — deployments that predate this hackathon, included here as evidence the protocol is
+> portable, not written for this submission alone. See [Live deployments](#live-deployments).
+>
+> Casper Buildathon judges: start with [DEMO_CASPER.md](DEMO_CASPER.md) instead.
 
-That's `get_cross_chain_trust_score`: a **free** Agent-to-MCP (A2MCP) service on OKX.AI that reads
-an agent's on-chain reputation and job/dispute history from four independently-run chains (Pharos,
-X Layer, Casper, plus a note on Stellar's zero-knowledge-gated reputation) and returns one
+## What it does
+
+Would you send a stranger money before they've done any work for you? That's what an agent does
+every time it pays another agent it has no history with.
+
+KARMA answers one question before that payment goes out: has this agent actually delivered
+before, and where? `get_cross_chain_trust_score` is a free Agent-to-MCP (A2MCP) service on
+OKX.AI. Give it an address, and it reads that agent's on-chain reputation and job/dispute history
+across four independently run chains — Pharos, X Layer, Casper, and Stellar — and returns one
 evidence-backed answer. No signup, no payment, one call.
 
-**Not another agent registry, and not another pre-signature checker.** Two things people building
-for this track tend to reach for, and KARMA is deliberately neither: it doesn't ask "is this
-transaction safe to sign right now" (that's intent-verification — a different, complementary
-problem some other Genesis entrants solve well); and it isn't a from-scratch marketplace built only
-for X Layer. KARMA answers "did this agent deliver last time, and can I prove it" — reading from a
-reputation/escrow/dispute-arbitration kernel that already has 155 Rust + 96 Foundry tests and two
-live Testnet deployments (Casper, Stellar) built *before* this hackathon existed. X Layer is the
-fourth chain the same spec lands on, not the first.
+It isn't an agent registry, and it isn't a pre-signature checker — those solve adjacent problems
+(identity, and "is this transaction safe to sign") that other Genesis entrants already cover well.
+KARMA reads reputation that already exists: an identity, escrow, and dispute-arbitration kernel
+with 155 Rust tests, 96 Foundry tests, and two live Testnet deployments (Casper, Stellar) that
+predate this hackathon. X Layer is the fourth chain the same spec lands on, not the first.
 
 ---
 
-## Fit to the OKX.AI Genesis Hackathon
+## Why it fits OKX.AI Genesis
 
-**The gap, precisely stated.** OKX.AI already has real, working trust infrastructure: agent
-identity built on **ERC-8004** (confirmed directly from OKX's own `okx-ai` Onchain OS skill), escrow
-for A2A jobs, and dispute arbitration by ≥5 staked Evaluators (≥100 OKB each, majority vote,
-weighted-random selection, wrong/timed-out votes slashed — verified at `okx.ai/tutorial`). This is
-not a gap in OKX's design — it's a deliberate, sensible scope. But as one independent write-up on
-OKX.AI's launch put it: *"the identity lives on OKX, the escrow lives on OKX, and the evaluators
-who settle disputes are OKX's network"* — reputation earned on OKX.AI is real, but it's scoped to
-OKX.AI. An agent that also works on Casper, Stellar, or Pharos carries no record of that anywhere
-OKX can see. KARMA reads across that boundary: same agent identity (an EVM address is
-chain-independent), reputation pulled from every chain it actually has history on.
+OKX.AI already ships real trust infrastructure: agent identity on ERC-8004 (per OKX's own
+`okx-ai` Onchain OS skill), escrow for A2A jobs, and dispute arbitration by five or more staked
+Evaluators (≥100 OKB each, majority vote, weighted-random selection, slashing for wrong or
+timed-out votes — per `okx.ai/tutorial`). That's a deliberate, sensible scope, not a gap — but it
+means reputation earned on OKX.AI stays scoped to OKX.AI. An agent with a track record on Casper,
+Stellar, or Pharos carries no record of it anywhere OKX can see. One independent write-up on the
+launch put it plainly: *"the identity lives on OKX, the escrow lives on OKX, and the evaluators
+who settle disputes are OKX's network."*
 
-| Category (target) | Why KARMA fits | Evidence in this repo |
+KARMA reads across that boundary. The agent identity is the same EVM address on every EVM chain,
+so reputation gets pulled from every chain that address actually has history on.
+
+| Track | Why KARMA fits | Evidence |
 |---|---|---|
-| **Software Utility** | A reusable trust-lookup primitive other ASPs call before transacting — not a single consumer app | `get_cross_chain_trust_score` (`src/plugins/trust_oracle.tool.ts`) |
-| **Finance Copilot** (secondary) | Counterparty risk scoring is a finance-copilot primitive — "should I let my agent pay this provider" | Same tool; `aggregateScore` is an evidence-backed risk read, not a black-box output |
-| OKX ecosystem integration | Agentic Wallet, Onchain OS `okx-ai` skill (ERC-8004), X Layer, x402 (`@x402/evm`, settling in USDT/USDG — confirmed, not USDC) | `src/lib/xlayer.ts`, `src/plugins/x402_xlayer.ts`, `script/deploy_xlayer.sh` |
-| Technical depth (separate from "is it live on X Layer yet") | Same escrow/dispute/reputation contract, same test suite, already proven on two other chains — X Layer is a chain *adapter*, not a rewrite | `contracts/AgentSkillRegistry.sol` (96/96 Foundry tests, unchanged) |
+| **Software Utility** | A reusable trust-lookup primitive other ASPs call before transacting, not a single consumer app | `get_cross_chain_trust_score` (`src/plugins/trust_oracle.tool.ts`) |
+| **Finance Copilot** | Counterparty risk scoring — "should my agent pay this provider" — is a finance-copilot primitive | Same tool; `aggregateScore` is evidence-backed, not a black box |
+| OKX ecosystem integration | Agentic Wallet, Onchain OS `okx-ai` skill (ERC-8004), X Layer, x402 (`@x402/evm`) | `src/lib/xlayer.ts`, `src/plugins/x402_xlayer.ts`, `script/deploy_xlayer.sh` |
+| Technical depth | Same escrow/dispute/reputation contract as two other live chains — X Layer is an adapter, not a rewrite | `contracts/AgentSkillRegistry.sol`, 96/96 Foundry tests, unchanged |
 
-**Why this is easy to judge quickly:** one free tool, one call, one JSON answer with the evidence
-attached (`chains: [...]`) — no payment flow to explain, no wallet funding required to try it, no
-multi-step negotiation. The depth (four chains, real tests, real Testnet deployments) is there if
-you look, but the demo itself is a single, simple call.
+The demo is deliberately small: one free tool, one call, one JSON answer with the evidence
+attached (`chains: [...]`). No payment flow, no wallet funding, no multi-step negotiation. The
+depth — four chains, real tests, real deployments — is there for a judge who wants to look
+further, but trying it doesn't require that.
 
-**Zero real money, on purpose.** Nothing in this submission touches mainnet value or requires
-staking: X Layer work is testnet-only, the ASP is listed free (not the paid x402 tier — that code
-is built and tested, just not switched on), and OKX.AI's own Evaluator role — which requires
-staking ≥100 OKB in real capital — was deliberately not pursued here even though OKX's docs
-explicitly invite custom Evaluator logic ("write your own to judge sharper"). That's a real,
-scoped-out opportunity, not a limitation we didn't notice — see
-[`docs/OKX_HACKATHON_CHECKLIST.md`](docs/OKX_HACKATHON_CHECKLIST.md) §7.
+Nothing in this submission touches mainnet value. X Layer work is testnet-only, the ASP is listed
+free rather than on the paid x402 tier, and OKX.AI's Evaluator role — which requires staking real
+OKB — isn't registered. What that trades off, and why, is in
+[Known limitations](#known-limitations).
 
-**Self-audit — one real gap, disclosed, not fixed under deadline pressure.** `aggregateScore`
-(`src/plugins/trust_oracle.tool.ts`) is a plain, equal-weighted average of whichever chains return
-a number. That's honest about *what data exists*, but it isn't the trust model the rest of KARMA
-already uses elsewhere — single-chain reputation is computed with an EigenTrust-lite flow ranking
-that decays over time and downweights thin history (see [Why the tech holds up](#why-the-tech-holds-up)).
-An agent with 1 job on X Layer counts exactly as much as one with 200 jobs on Casper in today's
-cross-chain average. The fix is straightforward (weight each chain's contribution by job count,
-decayed) but wasn't worth rushing into untested code days before a deadline;
-`jobsAsProvider`/`jobsAsRequester` are already returned per chain in the tool's output specifically
-so a caller can apply that judgment themselves until the aggregate does it natively.
+---
 
-**Honest status on the chain adapter itself:** the X Layer chain adapter, x402 payment plugin, and
-Trust Oracle tool are built, typechecked, and unit-tested (907/912 suite passing) — Foundry could
-not be installed inside the sandbox that assembled this pivot (GitHub release-API egress is
-policy-blocked there), so the `AgentSkillRegistry` **testnet broadcast is the next concrete step**
-(`script/deploy_xlayer.sh`, needs `forge` + a faucet-funded testnet key — see the checklist §1).
-Once deployed, the same tool starts returning real X Layer reads with zero code changes.
+## Live deployments
 
-**Reused, not rebuilt.** The escrow contract, the dispute-bond arbitration, the `IPaymentPlugin`
-interface, and the reputation kernel all predate this hackathon (Casper/Stellar work below). New
-for OKX.AI specifically: the X Layer chain adapter, the `x402-xlayer` payment plugin, the
-`get_cross_chain_trust_score` aggregation tool, and the free ASP listing itself.
+The same identity/reputation/escrow/dispute spec, independently deployed on four chains. This
+table is the evidence behind "portable" — every address below is checked and verifiable.
 
-Full step-by-step (what's done vs. what needs a human with real credentials): the checklist above,
-[`docs/OKX_HACKATHON_CHECKLIST.md`](docs/OKX_HACKATHON_CHECKLIST.md). Demo script:
-[`docs/demo-video-script-okx.md`](docs/demo-video-script-okx.md).
+| Chain | Contract | Tests | Notes |
+|---|---|---|---|
+| **X Layer** (OKX.AI Genesis) | [`0xBF28…74Cd2`](https://www.oklink.com/xlayer-test/address/0xBF285628869c2EFaf6731F8503B39B7130474Cd2) · testnet | 23 Vitest + shares Pharos's 96 Foundry | `IPaymentPlugin` v1.0 (`x402-xlayer`). Deploy tx [`0xe4f803…8b1b380`](https://www.oklink.com/xlayer-test/tx/0xe4f803add9aba71a34e995d00f5cdb849664bb35b90de3566196c25208b1b380). `get_cross_chain_trust_score` reads it live. |
+| **Casper** | [`hash-42f6945f…a2b5a1d`](https://testnet.cspr.live/contract-package/42f6945fe9ac5ab493beed468465228ecb830036e27bb2c8cac9e1736a2b5a1d) · testnet | 155 Rust | `IPaymentPlugin` v1.0. 2-of-2 multisig + 48h timelock governance, skill composition, dispute-bond arbitration. |
+| **Stellar** | [`agent_credential_verifier`](https://stellar.expert/explorer/testnet/contract/CDBIDMG22BBIQPSWBNPMUOXXH7XJMHUHASEQYS3TDH766WSATCJT4GTP) + [`reputation_aggregation_verifier`](https://stellar.expert/explorer/testnet/contract/CDR55NDIGKCWJXKQ334TNVHUAS37Q2ZBBGZZAV25OR6IC5O54UA7SRMO) · testnet | 12 + 19 Rust (Soroban) | `IPaymentPlugin` v1.0. Groth16/BN254 zero-knowledge reputation gating, native host functions. |
+| **Pharos** | [`0xc6d5c146…081b905ae`](https://atlantic.pharosscan.xyz/address/0xc6d5c146209e0833634bd33fafb9e65081b905ae) · Atlantic | 96 Foundry | The chain the spec was extracted from, and the bytecode X Layer reuses. `IPaymentPlugin` wrapper pending (v2). |
+
+Chain IDs and RPCs: X Layer testnet `1952` (`testrpc.xlayer.tech`), X Layer mainnet `196`
+(`rpc.xlayer.tech`, not deployed — testnet only, by design), Pharos Atlantic `688689`
+(`atlantic.dplabs-internal.com`).
+
+Deep dives: [DEMO_CASPER.md](DEMO_CASPER.md) (23 recorded live transactions) ·
+[DEMO_STELLAR.md](DEMO_STELLAR.md) · [DEMO.md](DEMO.md) (Pharos) ·
+[docs/standards/reference-implementations.md](docs/standards/reference-implementations.md).
 
 ---
 
 ## What KARMA actually builds
 
-Most agent projects ship a worker — one bot, one function. KARMA ships the institutions a labor
-market needs underneath it, and each one has code running on-chain, not a diagram:
+Most agent projects ship a worker: one bot, one function. KARMA ships the institutions a labor
+market needs underneath it — and each one is running code on-chain, not a diagram.
 
 | Real-world institution | In KARMA | Status |
 |---|---|---|
-| Credit bureau, but portable | Cross-chain reputation aggregation across independent deployments | `get_cross_chain_trust_score` — new for OKX.AI |
-| Credit bureau (single-chain) | On-chain reputation + EigenTrust-lite flow ranking + Sybil bond | live + tested, Casper/Pharos |
-| A private CV (prove without revealing) | Two Groth16/BN254 ZK verifiers — skill gate + portfolio credential | live on-chain, Stellar |
-| An escrow bank | Escrow + release on Pharos and Casper | live, both chains |
-| A vending machine for machines | Per-call x402 settlement | live (Stellar, Casper), built (X Layer) |
-| A courtroom — where the judge is also an agent | Dispute bond + neutral evaluator arbitration, single arbiter or an N-of-M panel | live on-chain, Casper |
-| A company, not just a freelancer | Skill composition + weighted revenue split | deployed, Casper |
+| A credit bureau, portable across chains | Cross-chain reputation aggregation | `get_cross_chain_trust_score` |
+| A credit bureau, single-chain | On-chain reputation + EigenTrust-lite flow ranking + Sybil bond | Live, Casper + Pharos |
+| A private CV — prove without revealing | Two Groth16/BN254 ZK verifiers: skill gate + portfolio credential | Live on-chain, Stellar |
+| An escrow bank | Escrow + release | Live, Pharos + Casper |
+| A vending machine for machines | Per-call x402 settlement | Live (Stellar, Casper), built (X Layer) |
+| A courtroom where the judge is also an agent | Dispute bond + neutral evaluator arbitration, single or N-of-M panel | Live on-chain, Casper |
+| A company, not a freelancer | Skill composition + weighted revenue split | Deployed, Casper |
 
-### Where this sits relative to adjacent standards
+### How this relates to MCP, x402, and ERC-8004
 
-Not competitors — each piece solves a different layer, and none of them solve all three:
+None of these compete with KARMA — each solves one layer, and none solves all three:
 
 | Standard | Solves | Doesn't solve |
 |---|---|---|
-| MCP | Wire format — how an agent calls a tool | Commerce — no price, payment, or trust |
-| x402 | Payment scheme — how money moves for a call | Trust — no identity, reputation, dispute |
-| ERC-8004 | Identity + a pointer to reputation | Settlement — no escrow, no payment rail; reputation is per-deployment, not portable across independent ones |
+| MCP | Wire format — how an agent calls a tool | Commerce: no price, payment, or trust |
+| x402 | Payment — how money moves for a call | Trust: no identity, reputation, or dispute |
+| ERC-8004 | Identity + a pointer to reputation | Settlement, and portability — reputation is per-deployment |
 | **KARMA** | **Identity + portable reputation + dispute resolution, wired to settlement, spoken over MCP** | — |
 
-Not abstract for OKX.AI specifically: OKX's own `okx-ai` Onchain OS skill describes its identity
-system as **ERC-8004** (register/update/search/rate — User/ASP/Evaluator). KARMA isn't proposing a
-standard next to a hypothetical one — it's extending exactly the cross-deployment-portability gap
-ERC-8004 leaves open, for the identity system OKX already shipped on X Layer.
-
-Full comparison: [docs/standards/relation-to-adjacent-standards.md](docs/standards/relation-to-adjacent-standards.md).
-
----
-
-## Proof it's a protocol, not a port
-
-The same identity/reputation/escrow/dispute spec, independently implemented on four chains — this
-table is the actual evidence behind "portable," not a claim on faith:
-
-| Chain | What's live | Spec conformance | Tests |
-|---|---|---|---|
-| **Casper** (`contracts-odra/`) | Escrow, symmetric dispute-bond arbitration (single-arbiter live; N-of-M panel tested, pending redeploy), multisig+timelock governance, skill composition. Governance-hardened, deployed on Testnet. | `IPaymentPlugin` **v1.0 ✓** | 155 Rust tests |
-| **Stellar** | Zero-knowledge reputation gating (Groth16/BN254, native host functions), settlement over x402. | `IPaymentPlugin` **v1.0 ✓** | 12 + 19 Rust tests (Soroban) |
-| **Pharos** (`contracts/AgentSkillRegistry.sol`) | Escrow, review window, dispute/refund, Sybil-resistance bond, evaluator-agent arbitration, governance. The chain the spec was extracted from — and the bytecode X Layer reuses. | `IPaymentPlugin` wrapper pending (v2) | 96 Foundry tests |
-| **X Layer** (`src/lib/xlayer.ts`) — OKX.AI Genesis Hackathon | Same `AgentSkillRegistry` bytecode as Pharos; `get_cross_chain_trust_score` reads it as the 4th leg. Testnet broadcast is the next step. | `IPaymentPlugin` **v1.0 ✓** (`x402-xlayer`, `@x402/evm`) | 23 Vitest, shares Pharos's 96 Foundry tests |
-
-Deep dives: [DEMO_CASPER.md](DEMO_CASPER.md) · [DEMO_STELLAR.md](DEMO_STELLAR.md) ·
-[DEMO.md](DEMO.md) (Pharos) ·
-[docs/standards/reference-implementations.md](docs/standards/reference-implementations.md).
+This isn't abstract for OKX.AI: its own `okx-ai` Onchain OS skill describes its identity system
+as ERC-8004 (register/update/search/rate, across User/ASP/Evaluator roles). KARMA extends exactly
+the cross-deployment portability gap ERC-8004 leaves open, for the identity system OKX already
+shipped on X Layer. Full comparison:
+[docs/standards/relation-to-adjacent-standards.md](docs/standards/relation-to-adjacent-standards.md).
 
 ### Why the tech holds up
 
-**Zero-knowledge reputation gating, live on Stellar.** An agent can prove "my reputation clears
-skill Y's threshold" via Groth16, verified on-chain by native BN254 host functions (CAP-0074) — the
-score, job history, and credential secret never leave the agent's machine. Two verifier contracts
-are live on Stellar Testnet (`agent_credential_verifier`, `reputation_aggregation_verifier`) —
-architecture, the soundness gaps found and fixed, and a live-captured demo:
-[DEMO_STELLAR.md](DEMO_STELLAR.md).
-
-**Reputation that resists Sybil attacks and wash trading**, not just a counter that goes up. An
-arm's-length guard means dealing with yourself earns zero reputation, an EigenTrust-lite flow
-ranking runs off-chain (value-weighted, decays over time), and an optional on-chain capital bond
-backs it further.
-
-**Non-repudiation and bounded authority**, on chains Terminal3 gates. Every job binds to a signed
-identity receipt, and any delegated authority is TEE-signed, time-bounded, and revocable.
-
-**A path toward becoming a standard, not just a claim of being one.** The settlement/identity/
-dispute interface is drafted as a Casper Enhancement Proposal
-([`CEP-0000`](docs/standards/CEP-0000-agent-skill-trust-registry.md)) covering every entry point,
-event, and state transition — so any project can adopt this trust layer without running a KARMA
-server.
-
----
-
-## Live deployment
-
-**X Layer** (OKX.AI Genesis Hackathon) — chain adapter + `x402-xlayer` payment plugin +
-`get_cross_chain_trust_score` are built and unit-tested; the `AgentSkillRegistry` broadcast itself
-is the next step (`script/deploy_xlayer.sh`, see [checklist](docs/OKX_HACKATHON_CHECKLIST.md) §1):
-
-| | |
-|---|---|
-| **`AgentSkillRegistry`** | not yet broadcast — same bytecode as the Pharos deployment below |
-| **X Layer testnet** | chain ID `1952`, RPC `https://testrpc.xlayer.tech` |
-| **X Layer mainnet** | chain ID `196`, RPC `https://rpc.xlayer.tech` (currency OKB) |
-
-<details>
-<summary><strong>Casper, Stellar, Pharos</strong> — predate this hackathon, kept here as portability evidence</summary>
-
-**Casper Testnet** (Odra, attestation-hardened) — full tx-by-tx evidence in [DEMO_CASPER.md](DEMO_CASPER.md):
-
-| | |
-|---|---|
-| **`AgentSkillRegistry`** | [`hash-42f6945fe9ac5ab493beed468465228ecb830036e27bb2c8cac9e1736a2b5a1d`](https://testnet.cspr.live/contract-package/42f6945fe9ac5ab493beed468465228ecb830036e27bb2c8cac9e1736a2b5a1d) |
-| **Governance** | real 2-of-2 multisig + 48h timelock, confirmed live from the contract's own storage |
-| **Sample transactions** | 23 real, `testnet.cspr.live`-verified calls — [DEMO_CASPER.md](DEMO_CASPER.md#recorded-live-transactions) |
-
-**Stellar Testnet** (Soroban, native BN254) — [DEMO_STELLAR.md](DEMO_STELLAR.md):
-
-| | |
-|---|---|
-| **`agent_credential_verifier`** | [`CDBIDMG22BBIQPSWBNPMUOXXH7XJMHUHASEQYS3TDH766WSATCJT4GTP`](https://stellar.expert/explorer/testnet/contract/CDBIDMG22BBIQPSWBNPMUOXXH7XJMHUHASEQYS3TDH766WSATCJT4GTP) |
-| **`reputation_aggregation_verifier`** | [`CDR55NDIGKCWJXKQ334TNVHUAS37Q2ZBBGZZAV25OR6IC5O54UA7SRMO`](https://stellar.expert/explorer/testnet/contract/CDR55NDIGKCWJXKQ334TNVHUAS37Q2ZBBGZZAV25OR6IC5O54UA7SRMO) |
-
-**Pharos Atlantic** — [DEMO.md](DEMO.md):
-
-| | |
-|---|---|
-| **Contract (v3)** | [`0xc6d5c146209e0833634bd33fafb9e65081b905ae`](https://atlantic.pharosscan.xyz/address/0xc6d5c146209e0833634bd33fafb9e65081b905ae) |
-| **Chain ID** | `688689` (EIP-1559) · RPC `https://atlantic.dplabs-internal.com` |
-
-</details>
+- **Zero-knowledge reputation, live on Stellar.** An agent proves "my reputation clears skill Y's
+  threshold" via Groth16, verified on-chain by native BN254 host functions (CAP-0074). The score,
+  job history, and credential secret never leave the agent's machine. Two verifier contracts are
+  live on Stellar Testnet — architecture, the soundness gaps found and fixed, and a recorded
+  demo: [DEMO_STELLAR.md](DEMO_STELLAR.md).
+- **Resistant to Sybil attacks and wash trading**, not just a counter that goes up. Dealing with
+  yourself earns zero reputation (an arm's-length guard); an EigenTrust-lite flow ranking runs
+  off-chain, value-weighted and decaying over time; an optional on-chain capital bond backs it
+  further.
+- **Non-repudiation and bounded authority**, on chains Terminal3 gates. Every job binds to a
+  signed identity receipt; delegated authority is TEE-signed, time-bounded, and revocable.
+- **A path toward a standard, not just a claim of being one.** The identity/reputation/escrow/
+  dispute interface is drafted as a Casper Enhancement Proposal
+  ([CEP-0000](docs/standards/CEP-0000-agent-skill-trust-registry.md)) covering every entry point,
+  event, and state transition — so another project can adopt the trust layer without running a
+  KARMA server.
 
 ---
 
 ## Quick start
 
-### Fastest path — try the Trust Oracle, no wallet needed
+### Try the Trust Oracle — no wallet needed
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm typecheck && pnpm test    # 907/912 passed, 5 pre-existing skips unrelated to this pivot
+pnpm typecheck && pnpm test    # 912/912 passing
 ```
 
 ```env
-# .env — minimal, verified: this is exactly what it takes to expose the tool (nothing more)
+# .env — this is everything it takes to expose the tool
 MCP_SAFE_MODE=false
 MCP_PLUGIN_ALLOWLIST=system.tool.ts,trust_oracle.tool.ts
 MCP_PLUGIN_ISOLATION_MODE=policy
 ```
 
 ```bash
-pnpm dev   # starts the MCP server (stdio); log line confirms: "Plugin loaded 'trust_oracle.tool.ts' (1/1 tools accepted)"
+pnpm dev   # starts the MCP server (stdio) — look for "Plugin loaded 'trust_oracle.tool.ts' (1/1 tools accepted)"
 ```
 
-Then, from any MCP client, call `get_cross_chain_trust_score({ evm_address: "0x..." })`. With no
-chain configured it still answers — every leg reports a `note` instead of failing (see
-`src/__tests__/trust_oracle_tool.test.ts`, "degrades gracefully"). Add `PHAROS_*` / `XLAYER_*` /
-`CASPER_*` to the same `.env` (see `.env.example`) to get real reads instead of notes.
+Call `get_cross_chain_trust_score({ evm_address: "0x..." })` from any MCP client. With no chain
+configured it still answers — every leg reports a `note` instead of failing
+(`src/__tests__/trust_oracle_tool.test.ts`, "degrades gracefully"). Add `PHAROS_*` / `XLAYER_*` /
+`CASPER_*` to `.env` (see `.env.example`) for real reads instead of notes.
 
-### Full setup (all chains, keystore, on-chain demos)
+### Full setup — all chains, keystore, on-chain demos
 
 - Node.js 20+, pnpm 9.15.9 (`corepack enable && corepack prepare pnpm@9.15.9 --activate`)
-- [Foundry](https://book.getfoundry.sh/) (`foundryup`) only if you're running Solidity tests or
-  deploying to Pharos/X Layer
-- Redis 8.2.2+ only if `STORAGE_DRIVER=redis` (production)
+- [Foundry](https://book.getfoundry.sh/) (`foundryup`), only for Solidity tests or deploying to
+  Pharos/X Layer
+- Redis 8.2.2+, only if `STORAGE_DRIVER=redis` (production)
 
 ```bash
 KEYSTORE_PATH=./keystore.json KEYSTORE_PASSWORD=<min-8-chars> \
   pnpm setup:keystore agent-alpha agent-beta
 ```
 
-Generates fresh keypairs (Web3 Secret Storage v3, scrypt + aes-128-ctr), writes `keystore.json`
-(`0o600`), and prints each address. Full runtime reference, HTTP transport, production auth
-(JWT/OIDC), Docker: [docs/RUNTIME.md](docs/RUNTIME.md). Per-chain quickstarts:
-[DEMO_CASPER.md](DEMO_CASPER.md), [DEMO_STELLAR.md](DEMO_STELLAR.md), [DEMO.md](DEMO.md) (Pharos).
+This generates fresh keypairs (Web3 Secret Storage v3, scrypt + aes-128-ctr), writes
+`keystore.json` at `0o600`, and prints each address.
+
+Full runtime reference, HTTP transport, production auth (JWT/OIDC), and Docker:
+[docs/RUNTIME.md](docs/RUNTIME.md). Per-chain quickstarts: [DEMO_CASPER.md](DEMO_CASPER.md),
+[DEMO_STELLAR.md](DEMO_STELLAR.md), [DEMO.md](DEMO.md).
 
 ---
 
 ## Tools
 
-`get_cross_chain_trust_score` is the OKX.AI submission — table and description in
-[Fit to the OKX.AI Genesis Hackathon](#fit-to-the-okxai-genesis-hackathon) above. The server also
-exposes the rest of the multi-chain skill economy: 14 KARMA skill-economy tools (Pharos), 8
-Terminal3 identity/delegation tools, and 46 Casper Odra registry tools (skill registry,
-composition, evaluator/dispute/arbitration, N-of-M panel arbitration, cross-chain-rep governance).
-Full tables, kept out of this README to keep the OKX pitch focused:
-[**docs/TOOLS.md**](docs/TOOLS.md).
+`get_cross_chain_trust_score` is the OKX.AI submission (see
+[Why it fits OKX.AI Genesis](#why-it-fits-okxai-genesis) above). The same server also exposes the
+rest of the multi-chain skill economy: 14 KARMA skill-economy tools (Pharos), 8 Terminal3
+identity/delegation tools, and 46 Casper Odra registry tools (skill registry, composition,
+evaluator/dispute/arbitration, N-of-M panel arbitration, cross-chain-rep governance). Full
+reference, kept out of this README to keep the pitch focused:
+[docs/TOOLS.md](docs/TOOLS.md).
 
 ---
 
 ## Testing
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm test   # 907/912 passed, 5 pre-existing skips unrelated to this pivot
+pnpm typecheck && pnpm lint && pnpm test   # 912/912 passing
 ```
 
 The X Layer/OKX.AI additions (`src/lib/xlayer.ts`, `src/plugins/x402_xlayer.ts`,
 `src/plugins/trust_oracle.tool.ts`) add 23 Vitest tests: plugin metadata/quote/pay/verify,
-boot-time registration, and the oracle tool's graceful-degradation behavior. The 5 skipped tests
-are pre-existing environment gaps unrelated to this pivot.
+boot-time registration, and the oracle's graceful-degradation behavior.
 
 <details>
 <summary><strong>Casper, Stellar, Pharos test suites</strong> (predate this hackathon)</summary>
 
 ```bash
-cargo +nightly test --manifest-path contracts-odra/Cargo.toml   # 155/155 Rust tests, Casper
+cargo +nightly test --manifest-path contracts-odra/Cargo.toml   # 155/155 Rust, Casper
 cd contracts-soroban/agent_credential_verifier && cargo test --features testutils       # 12/12
 cd contracts-soroban/reputation_aggregation_verifier && cargo test --features testutils # 19/19
-pnpm test:contract   # Foundry — 96/96 AgentSkillRegistry.sol tests (shared by Pharos + X Layer)
+pnpm test:contract   # Foundry — 96/96 AgentSkillRegistry.sol, shared by Pharos + X Layer
 ```
 
-Casper: 155 Rust tests covering the full escrow/dispute/evaluator/composition/governance feature
-set plus 4 property-based invariant tests (escrow conservation, reputation bounds — each verified
-to actually catch a regression by deliberately breaking the invariant first). Stellar: both Soroban
-suites include a real, non-mocked Groth16 proof verified via the native
+Casper's 155 Rust tests cover the full escrow/dispute/evaluator/composition/governance feature
+set, plus 4 property-based invariant tests (escrow conservation, reputation bounds) — each
+confirmed to actually catch a regression by deliberately breaking the invariant first. Both
+Stellar/Soroban suites verify a real, non-mocked Groth16 proof through the native
 `bn254_multi_pairing_check` host function. Full detail: [DEMO_CASPER.md](DEMO_CASPER.md) ·
 [DEMO_STELLAR.md](DEMO_STELLAR.md).
 
 </details>
+
+---
+
+## Known limitations
+
+Disclosed here rather than left for a judge to find:
+
+- **`aggregateScore` is an equal-weighted average**, not the decayed, history-weighted
+  EigenTrust-lite model KARMA uses for single-chain reputation elsewhere — an agent with 1 job on
+  X Layer currently counts the same as one with 200 jobs on Casper.
+  `jobsAsProvider`/`jobsAsRequester` are already returned per chain so a caller can apply that
+  judgment today; [`src/scripts/evaluator_skill_reference.ts`](src/scripts/evaluator_skill_reference.ts)
+  (`pnpm demo:evaluator-skill-reference`) is a worked illustration of the job-count-weighted fix,
+  kept separate from the shipped tool rather than rushed into it.
+- **The paid x402 tier is built but not switched on.** `src/plugins/x402_xlayer.ts` is
+  typechecked and tested; what's live is the free listing. Turning on paid calls needs a real
+  settlement-asset address and a facilitator endpoint, and both resolve to **X Layer mainnet
+  only** today — verified on-chain: X Layer settles in USD₮0
+  (`0x779Ded0c9e1022225f8E0630b35a9b54bE713736`) or USDG
+  (`0x4ae46a509F6b1D9056937BA4500cb143933D2dc8`), neither of which has a testnet deployment.
+  Enabling it means real money, which this submission deliberately avoids — see
+  [`docs/OKX_HACKATHON_CHECKLIST.md`](docs/OKX_HACKATHON_CHECKLIST.md) §9.
+- **OKX.AI's Evaluator role isn't registered.** It requires staking ≥100 OKB in real capital to
+  arbitrate disputes — out of scope for a zero-financial-risk submission. The signal an Evaluator
+  could use is built as a reference implementation (same script as above): it reads
+  `get_cross_chain_trust_score` and prints a comparison, but doesn't vote, submit, or touch any
+  OKX.AI contract.
+- **Pharos's `IPaymentPlugin` is a v2 wrapper, pending.** Escrow and settlement both work today;
+  the conformance wrapper that brings it to the same v1.0 status as Stellar, Casper, and X Layer
+  isn't shipped yet.
+
+Full status on every open item: [docs/OKX_HACKATHON_CHECKLIST.md](docs/OKX_HACKATHON_CHECKLIST.md).
 
 ---
 
@@ -323,53 +289,53 @@ docs/            OKX_HACKATHON_CHECKLIST.md, demo-video-script-okx.md, TOOLS.md,
 
 ## Roadmap & team
 
-**Team.** Solo builder — **Eilodon**, affiliated with **B.ONE**.
+**Next up:**
 
-**Community.** [X / Twitter](https://x.com/MathEnemy) · Telegram [@HoaTrungBinh](https://t.me/HoaTrungBinh) · Discord: `mathenemy`.
-
-**What's next, concretely:**
-
-- **X Layer testnet broadcast** — the one concrete blocker on the OKX.AI submission
-  ([checklist](docs/OKX_HACKATHON_CHECKLIST.md) §1).
-- **Weight `aggregateScore` by job count / recency**, closing the self-audited gap above, instead
-  of the current plain average.
-- **Apply to Find Super Nova**, independent of the hackathon result
+- Register the free ASP listing on OKX.AI — the next concrete step now that the X Layer contract
+  is live ([checklist](docs/OKX_HACKATHON_CHECKLIST.md) §3).
+- Weight `aggregateScore` by job count and recency, closing the gap in
+  [Known limitations](#known-limitations), instead of the current plain average.
+- Apply to Find Super Nova, independent of the hackathon result
   ([checklist](docs/OKX_HACKATHON_CHECKLIST.md) §6).
-- **Standardize the interface, not just this one deployment.** Pull `docs/standards/` and its
-  conformance test vectors into a standalone installable package, get a second independently
-  authored implementation built against it.
-- **Redeploy N-of-M panel arbitration** (built, 155/155 Rust tests, landed a day after the
-  currently deployed Casper contract) and run a live panel dispute.
+- Package the standard, not just this deployment: pull `docs/standards/` and its conformance test
+  vectors into a standalone installable package, and get a second, independently authored
+  implementation built against it.
+- Redeploy N-of-M panel arbitration (built, 155/155 Rust tests) and run a live panel dispute.
 
-This list is scoped to what's actually planned, not a wishlist. A mainnet timeline, funding, and a
-monetization model aren't set yet — this section gets updated once they are.
+A mainnet timeline, funding, and a monetization model aren't set yet — this section updates once
+they are.
+
+**Team.** Solo builder — Eilodon, affiliated with B.ONE. [X / Twitter](https://x.com/MathEnemy) ·
+Telegram [@HoaTrungBinh](https://t.me/HoaTrungBinh) · Discord `mathenemy`.
 
 ---
 
 ## Security notes
 
-- The external child-process plugin runner is best-effort hardening — not an OS/container/microVM
-  sandbox; untrusted third-party plugins aren't supported in production yet.
-- `karma.tool.ts` / `t3.tool.ts` / `trust_oracle.tool.ts` use in-process singletons and must run
+- The external child-process plugin runner is best-effort hardening, not an OS/container/microVM
+  sandbox — untrusted third-party plugins aren't supported in production yet.
+- `karma.tool.ts`, `t3.tool.ts`, and `trust_oracle.tool.ts` use in-process singletons and must run
   in-process; they throw at startup in the external worker.
 - The keystore is testnet-only. Rotate `KEYSTORE_PASSWORD` (re-encrypt) if it's ever exposed;
   `keystore.json*` and `.env*` are gitignored.
-- Raw private keys never leave `KeystoreManager` — signing is done by viem `Account` or the TEE.
-- `src/plugins/x402_xlayer.ts` refuses to guess a settlement-token contract address (fails loud
-  instead) — a wrong guess would silently misdirect a real payment.
+- Raw private keys never leave `KeystoreManager` — signing happens through viem's `Account` or
+  the TEE.
+- `src/plugins/x402_xlayer.ts` refuses to guess a settlement-token address and fails loud instead
+  — a wrong guess would silently misdirect a real payment.
 
-**Found & fixed during Casper governance-hardening** (full writeup: [DEMO_CASPER.md](DEMO_CASPER.md)):
-a code-level review surfaced three real gaps. Two are fixed (a governance-bypass inconsistency in
-`set_arbiter`/`set_dispute_bond_bps`, and a deploy-time config gap that would have made the fix
-theater). One is disclosed and still open: upgrade-token custody for the Odra contract currently
-sits with a single governance signer's key, outside the multisig+timelock gate that covers
-everything else — two remediation options are on the table, not resolved yet.
+**Found and fixed during Casper governance-hardening** (full write-up:
+[DEMO_CASPER.md](DEMO_CASPER.md)): a code-level review surfaced three gaps. Two are fixed — a
+governance-bypass inconsistency in `set_arbiter`/`set_dispute_bond_bps`, and a deploy-time config
+gap that would have made that fix ineffective. One is disclosed and still open: upgrade-token
+custody for the Odra contract currently sits with a single governance signer's key, outside the
+multisig+timelock gate that covers everything else. Two remediation options are on the table, not
+yet resolved.
 
-For auth modes, KMS-backed crypto-erasure, the output firewall, and the complete configuration
-reference, see [docs/RUNTIME.md](docs/RUNTIME.md).
+Auth modes, KMS-backed crypto-erasure, the output firewall, and the full configuration reference:
+[docs/RUNTIME.md](docs/RUNTIME.md).
 
 ---
 
 ## License
 
-See [LICENSE](LICENSE).
+[Apache 2.0](LICENSE).

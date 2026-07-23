@@ -18,11 +18,18 @@ const XLAYER_TESTNET_CAIP2 = "eip155:1952";
 const XLAYER_MAINNET_CAIP2 = "eip155:196";
 const XLAYER_NETWORKS: readonly string[] = [XLAYER_TESTNET_CAIP2, XLAYER_MAINNET_CAIP2];
 
-/** OKX AI settles ASP payments in USDT or USDG (confirmed: okx.com/learn/okx-ai), not USDC — so
- *  this is deliberately asset-agnostic, not hardcoded to one token. OKX's tokenlist
- *  (github.com/okx/xlayer-tokenlist) has the authoritative address for whichever settlement asset
- *  a given facilitator expects; fail loud rather than guess a contract address that would
- *  silently misdirect a real payment. */
+/** Marketplace-level messaging (okx.com/learn/okx-ai) says OKX AI settles ASP payments in "USDT
+ *  or USDG"; OKX's own x402 facilitator SDK (github.com/okx/payments/go, FACILITATOR.md) is more
+ *  specific for this chain: X Layer (eip155:196, MAINNET only) settles in USD₮0 — Tether's
+ *  LayerZero omnichain OFT, not plain USDT — at 0x779Ded0c9e1022225f8E0630b35a9b54bE713736.
+ *  USDG is also live on X Layer mainnet (github.com/okx/xlayer-tokenlist:
+ *  0x4ae46a509F6b1D9056937BA4500cb143933D2dc8). Both verified on-chain in-session (symbol/decimals
+ *  match). Neither address has bytecode on X Layer TESTNET (eip155:1952) — verified in-session —
+ *  and no official OKX source (tokenlist or facilitator SDK) documents a testnet settlement asset
+ *  or testnet facilitator for X Layer at all; the paid tier appears to be a mainnet-only path
+ *  today. This stays asset-agnostic and env-var-driven rather than hardcoding one of the above,
+ *  since which asset a given facilitator actually expects can still vary; fail loud rather than
+ *  guess a contract address that would silently misdirect a real payment. */
 function defaultAssetForNetwork(network: string): string {
   const envVar =
     network === XLAYER_TESTNET_CAIP2 ? "XLAYER_SETTLEMENT_ASSET_TESTNET_ADDRESS" : "XLAYER_SETTLEMENT_ASSET_ADDRESS";
