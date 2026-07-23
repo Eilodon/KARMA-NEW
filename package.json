@@ -44,7 +44,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",
-    "@aws-sdk/client-kms": "^3.1068.0",
+    "@aws-sdk/client-kms": "^3.1088.0",
     "@casper-ecosystem/casper-eip-712": "^1.2.1",
     "@cfworker/json-schema": "^4.1.1",
     "@modelcontextprotocol/express": "^2.0.0-beta.3",
