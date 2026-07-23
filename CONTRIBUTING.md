@@ -7,7 +7,7 @@ second independent implementation is explicitly one of the project's next steps.
 
 ## Getting started
 
-Follow the [Quick start](README.md#quick-start) section in the README for install, keystore
+Follow the [Try it](README.md#try-it--no-wallet-needed) section in the README for install, keystore
 setup, and running the server locally. [DEMO_CASPER.md](DEMO_CASPER.md) and
 [DEMO_STELLAR.md](DEMO_STELLAR.md) are the fastest way to see the full system working end-to-end
 before making changes.
