@@ -1,8 +1,11 @@
 # OKX.AI Genesis Hackathon — what's left, and who does it
 
-Deadline: **27 July 2026, 23:59 UTC**. Everything below needs credentials, an email login, a
-funded wallet, or an X/Google account this session doesn't have — so it's explicitly out of scope
-for the agent and needs a human.
+Deadline: **27 July 2026, 23:59 UTC**. Most of what's below needs credentials, an email login, a
+funded wallet, or an X/Google account a given agent session doesn't have — that's explicitly out
+of scope for the agent and needs a human. §1 (X Layer testnet deploy) turned out to be an
+exception: the funding step needed a human, but the agent handled the rest (Foundry, the dry-run,
+and the actual broadcast) once funded — see §1's status below before assuming a step needs a human
+end-to-end.
 
 **Strategy in one line: free tier, testnet-only, zero real money at risk, submit early.** No step
 below touches mainnet value or requires staking. That's a deliberate choice, not a limitation —
@@ -16,40 +19,24 @@ window — so **§3 (register the ASP) needs to happen days before the deadline,
 leave room for a resubmission if the first review doesn't pass. Everything below is ordered so §3
 can start as early as possible.
 
-## 1. Deploy `AgentSkillRegistry` to X Layer **testnet** (free — faucet OKB only)
+## 1. Deploy `AgentSkillRegistry` to X Layer **testnet** — DONE
 
-**Status: prepared and dry-run verified in a later session — the only remaining step is
-funding.** An earlier session couldn't install Foundry (GitHub release-API egress was
+**Status: live.** An earlier session couldn't install Foundry (GitHub release-API egress was
 policy-blocked there); that's not universal — a later session had `forge`/`cast` available
-already, generated a deployer key, and ran a full simulation against the live testnet RPC:
+already, generated a deployer key, dry-run simulated the deploy, had the human fund it from the
+faucet (the one step that genuinely needed a person — captcha-gated), then broadcast for real:
 
-```
-$ PRIVATE_KEY=0x... forge script script/Deploy.s.sol --rpc-url https://testrpc.xlayer.tech --chain-id 1952
-Script ran successfully.
-AgentSkillRegistry deployed at: 0xBF285628869c2EFaf6731F8503B39B7130474Cd2   (simulated address)
-Estimated amount required: 0.000185185804629645 ETH
-SIMULATION COMPLETE. To broadcast these transactions, add --broadcast ...
-```
+- **Contract:** [`0xBF285628869c2EFaf6731F8503B39B7130474Cd2`](https://www.oklink.com/xlayer-test/address/0xBF285628869c2EFaf6731F8503B39B7130474Cd2)
+- **Tx:** [`0xe4f803add9aba71a34e995d00f5cdb849664bb35b90de3566196c25208b1b380`](https://www.oklink.com/xlayer-test/tx/0xe4f803add9aba71a34e995d00f5cdb849664bb35b90de3566196c25208b1b380) — block 36329733, ~0.00007 OKB gas
+- **Deployer/owner:** `0xc3BbCd6FCce48E04edb5985FE869203768bbCccd` (fresh burner key generated via
+  `cast wallet new` in-session, holds no other value; see the handoff credentials file for the
+  private key — not committed to the repo)
+- **Verified end-to-end:** `get_cross_chain_trust_score` against this address returns a live
+  `reputation: 50` (bootstrap default) instead of the `XLAYER_CONTRACT_ADDRESS not configured`
+  note.
+- `.env`'s `XLAYER_CONTRACT_ADDRESS` is set to the address above.
 
-So: compiles, deploys-in-simulation, gas estimate is trivial (~0.0002 OKB). What's left is not a
-tooling gap, it's the one thing an agent genuinely can't do — pass a faucet's human/captcha check:
-
-- [ ] **You fund this address** with a small amount of **testnet** OKB (the simulation above
-      needed ~0.0002 OKB; fund at least 0.01 for headroom) from X Layer's faucet:
-      `web3.okx.com/xlayer/docs/developer/bridge/get-testnet-okb-from-faucet` →
-      `0xc3BbCd6FCce48E04edb5985FE869203768bbCccd` (fresh burner key, generated via
-      `cast wallet new` in-session, holds no other value, private key is in the untracked local
-      `.env` — never committed).
-- [ ] Tell the agent it's funded — it runs `PRIVATE_KEY=0x... ./script/deploy_xlayer.sh testnet`
-      itself (same command as above, plus `--broadcast`) and reports back the deployed address.
-- [ ] Agent copies the printed address into `.env` as `XLAYER_CONTRACT_ADDRESS`.
-
-If you'd rather use your own key instead of the generated burner: `cast wallet new` (or reuse one
-you control), fund it, then hand the agent `PRIVATE_KEY=0x...` directly.
-
-This step is optional for the ASP listing itself (the free A2MCP tier in §3 doesn't require it) —
-it's what makes the "4 chains, not 3" evidence in the README true instead of aspirational. Worth
-doing, but doesn't block §2/§3 if you're short on time.
+This makes the "4 chains, not 3" evidence in the README literally true, not aspirational.
 
 ## 2. OKX Developer Portal API keys + Onchain OS + Agentic Wallet (free, no KYC)
 
@@ -172,9 +159,8 @@ Built, typechecked (`pnpm typecheck` clean), linted (`pnpm lint` clean), and tes
   asset-agnostic (USDT/USDG, not hardcoded to USDC) — built and tested, not switched on for Genesis
 - `src/plugins/trust_oracle.tool.ts` — `get_cross_chain_trust_score`, the ASP's actual product,
   registered free
-- `script/deploy_xlayer.sh` — testnet deploy wrapper; **dry-run verified against the live testnet
-  RPC in-session** (`forge` was available, no install needed) — needs only a faucet-funded key,
-  see §1
+- `script/deploy_xlayer.sh` — testnet deploy wrapper; **used for a real broadcast in-session**
+  (`forge` was available, no install needed) — `AgentSkillRegistry` is live, see §1
 - `src/scripts/evaluator_skill_reference.ts` — unregistered, unstaked reference implementation of
   an OKX.AI Evaluator signal built on `get_cross_chain_trust_score`, see §7
 - `README.md` — rewritten fully around the OKX.AI fit

@@ -71,19 +71,20 @@ so a caller can apply that judgment themselves until the aggregate does it nativ
 illustration of that weighting now exists as a separate reference script, not wired into the paid
 tool — see the Evaluator note below.
 
-**Honest status on the chain adapter itself:** the X Layer chain adapter, x402 payment plugin, and
-Trust Oracle tool are built, typechecked, and unit-tested (912/912 suite passing). An earlier
+**Status on the chain adapter itself: deployed and live.** `AgentSkillRegistry` is broadcast on X
+Layer testnet at
+[`0xBF285628869c2EFaf6731F8503B39B7130474Cd2`](https://www.oklink.com/xlayer-test/address/0xBF285628869c2EFaf6731F8503B39B7130474Cd2)
+(tx [`0xe4f803add9aba71a34e995d00f5cdb849664bb35b90de3566196c25208b1b380`](https://www.oklink.com/xlayer-test/tx/0xe4f803add9aba71a34e995d00f5cdb849664bb35b90de3566196c25208b1b380),
+block 36329733, ~0.00007 OKB gas). `get_cross_chain_trust_score` reads it live end-to-end —
+verified in-session: a fresh never-transacted address returns `reputation: 50` (the contract's
+bootstrap default) instead of the `XLAYER_CONTRACT_ADDRESS not configured` note. An earlier
 session that assembled this pivot couldn't install Foundry (GitHub release-API egress was
-policy-blocked there) and left the `AgentSkillRegistry` **testnet broadcast** as the next step —
-that limitation doesn't hold in every environment: `forge`/`cast` are available here, and
-`forge script script/Deploy.s.sol --rpc-url https://testrpc.xlayer.tech --chain-id 1952` (no
-`--broadcast`) simulates clean against the live testnet RPC — compiles, deploys in-simulation,
-estimates ~0.000185 OKB gas. A fresh deployer key was generated in-session
-(`cast wallet new`, testnet-only, holds no other value) and is sitting in the untracked local
-`.env`. The **only remaining step is funding that address from the faucet** (a human action —
-faucets are captcha/account-gated); once funded, `PRIVATE_KEY=... ./script/deploy_xlayer.sh
-testnet` broadcasts for real. See the checklist §1 for the exact address and command.
-Once deployed, the same tool starts returning real X Layer reads with zero code changes.
+policy-blocked there); that limitation didn't hold in every environment — `forge`/`cast` were
+available in a later one, which generated a fresh testnet-only deployer key (`cast wallet new`),
+got it funded from the X Layer faucet (the one step that genuinely needed a human — faucets are
+captcha/account-gated), and ran `script/deploy_xlayer.sh testnet` for real. The X Layer chain
+adapter, x402 payment plugin, and Trust Oracle tool are also typechecked and unit-tested
+(912/912 suite passing).
 
 **On the OKX.AI Evaluator role (checklist §7):** not registered, not staked — unchanged, since
 that still requires >=100 OKB of real capital, a genuine out-of-scope-for-this-session decision,
@@ -149,7 +150,7 @@ table is the actual evidence behind "portable," not a claim on faith:
 | **Casper** (`contracts-odra/`) | Escrow, symmetric dispute-bond arbitration (single-arbiter live; N-of-M panel tested, pending redeploy), multisig+timelock governance, skill composition. Governance-hardened, deployed on Testnet. | `IPaymentPlugin` **v1.0 ✓** | 155 Rust tests |
 | **Stellar** | Zero-knowledge reputation gating (Groth16/BN254, native host functions), settlement over x402. | `IPaymentPlugin` **v1.0 ✓** | 12 + 19 Rust tests (Soroban) |
 | **Pharos** (`contracts/AgentSkillRegistry.sol`) | Escrow, review window, dispute/refund, Sybil-resistance bond, evaluator-agent arbitration, governance. The chain the spec was extracted from — and the bytecode X Layer reuses. | `IPaymentPlugin` wrapper pending (v2) | 96 Foundry tests |
-| **X Layer** (`src/lib/xlayer.ts`) — OKX.AI Genesis Hackathon | Same `AgentSkillRegistry` bytecode as Pharos; `get_cross_chain_trust_score` reads it as the 4th leg. Testnet broadcast is the next step. | `IPaymentPlugin` **v1.0 ✓** (`x402-xlayer`, `@x402/evm`) | 23 Vitest, shares Pharos's 96 Foundry tests |
+| **X Layer** (`src/lib/xlayer.ts`) — OKX.AI Genesis Hackathon | Same `AgentSkillRegistry` bytecode as Pharos; live on testnet at [`0xBF28...74Cd2`](https://www.oklink.com/xlayer-test/address/0xBF285628869c2EFaf6731F8503B39B7130474Cd2); `get_cross_chain_trust_score` reads it as the 4th leg, verified end-to-end. | `IPaymentPlugin` **v1.0 ✓** (`x402-xlayer`, `@x402/evm`) | 23 Vitest, shares Pharos's 96 Foundry tests |
 
 Deep dives: [DEMO_CASPER.md](DEMO_CASPER.md) · [DEMO_STELLAR.md](DEMO_STELLAR.md) ·
 [DEMO.md](DEMO.md) (Pharos) ·
@@ -183,14 +184,14 @@ server.
 ## Live deployment
 
 **X Layer** (OKX.AI Genesis Hackathon) — chain adapter + `x402-xlayer` payment plugin +
-`get_cross_chain_trust_score` are built and unit-tested; the `AgentSkillRegistry` broadcast itself
-is the next step (`script/deploy_xlayer.sh`, see [checklist](docs/OKX_HACKATHON_CHECKLIST.md) §1):
+`get_cross_chain_trust_score` are built, unit-tested, and the `AgentSkillRegistry` broadcast is
+live on testnet (`script/deploy_xlayer.sh`, see [checklist](docs/OKX_HACKATHON_CHECKLIST.md) §1):
 
 | | |
 |---|---|
-| **`AgentSkillRegistry`** | not yet broadcast — same bytecode as the Pharos deployment below |
+| **`AgentSkillRegistry`** | [`0xBF285628869c2EFaf6731F8503B39B7130474Cd2`](https://www.oklink.com/xlayer-test/address/0xBF285628869c2EFaf6731F8503B39B7130474Cd2) — same bytecode as the Pharos deployment below |
 | **X Layer testnet** | chain ID `1952`, RPC `https://testrpc.xlayer.tech` |
-| **X Layer mainnet** | chain ID `196`, RPC `https://rpc.xlayer.tech` (currency OKB) |
+| **X Layer mainnet** | chain ID `196`, RPC `https://rpc.xlayer.tech` (currency OKB) — not deployed (testnet only, by design; see README top) |
 
 <details>
 <summary><strong>Casper, Stellar, Pharos</strong> — predate this hackathon, kept here as portability evidence</summary>
