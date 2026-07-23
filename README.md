@@ -47,8 +47,8 @@ so reputation gets pulled from every chain that address actually has history on.
 |---|---|---|
 | **Software Utility** | A reusable trust-lookup primitive other ASPs call before transacting, not a single consumer app | `get_cross_chain_trust_score` (`src/plugins/trust_oracle.tool.ts`) |
 | **Finance Copilot** | Counterparty risk scoring — "should my agent pay this provider" — is a finance-copilot primitive | Same tool; `aggregateScore` is evidence-backed, not a black box |
-| OKX ecosystem integration | Agentic Wallet, Onchain OS `okx-ai` skill (ERC-8004), X Layer, x402 (`@x402/evm`) | `src/lib/xlayer.ts`, `src/plugins/x402_xlayer.ts`, `script/deploy_xlayer.sh` |
-| Technical depth | Same escrow/dispute/reputation contract as two other live chains — X Layer is an adapter, not a rewrite | `contracts/AgentSkillRegistry.sol`, 96/96 Foundry tests, unchanged |
+| OKX ecosystem integration | Agentic Wallet, Onchain OS `okx-ai` skill (ERC-8004), X Layer, x402 (`@x402/evm`) | `src/lib/xlayer.ts`, `src/plugins/x402_xlayer.ts`, `script/deploy_xlayer.sh`; `okx/onchainos-skills` installed for real (`skills-lock.json`) and composed live with `get_cross_chain_trust_score` in `src/scripts/demo_onchainos_composability.ts` — see [docs/TOOLS.md](docs/TOOLS.md#composability-with-onchain-os-okxonchainos-skills) |
+| Technical depth | Same escrow/dispute/reputation contract as two other live chains — X Layer is an adapter, not a rewrite | `contracts/AgentSkillRegistry.sol`, 96/96 Foundry tests, unchanged; `RationaleAttestation.sol` sidecar (P2-A, ported from Casper) adds decision-rationale attestation without touching the deployed registry |
 
 The demo is deliberately small: one free tool, one call, one JSON answer with the evidence
 attached (`chains: [...]`). No payment flow, no wallet funding, no multi-step negotiation. The

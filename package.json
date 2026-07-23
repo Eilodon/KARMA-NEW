@@ -27,6 +27,7 @@
     "demo:evaluator-skill-reference": "tsx src/scripts/evaluator_skill_reference.ts",
     "demo:self-hosting": "tsx src/scripts/demo_self_hosting.ts",
     "demo:cross-chain": "tsx src/scripts/demo_cross_chain.ts",
+    "demo:onchainos": "tsx src/scripts/demo_onchainos_composability.ts",
     "demo:casper": "tsx src/scripts/demo_casper_e2e.ts",
     "demo:casper:composition": "tsx src/scripts/demo_casper_skill_composition.ts",
     "demo:casper:x402": "tsx src/scripts/demo_casper_x402_live.ts",

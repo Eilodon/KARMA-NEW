@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "skills": {
+    "okx-agent-payments-protocol": {
+      "source": "okx/onchainos-skills",
+      "sourceType": "github",
+      "skillPath": "skills/okx-agent-payments-protocol/SKILL.md",
+      "computedHash": "cf4e0becfe8a361ab0bd984ae479d07749ec9f7f2e5460c5237f7656757faa28"
+    },
+    "okx-agentic-wallet": {
+      "source": "okx/onchainos-skills",
+      "sourceType": "github",
+      "skillPath": "skills/okx-agentic-wallet/SKILL.md",
+      "computedHash": "301da9ab05f773cbfd8206f29c829eaceaca6694ce1be2b78be4e92d937e5a21"
+    },
+    "okx-ai": {
+      "source": "okx/onchainos-skills",
+      "sourceType": "github",
+      "skillPath": "skills/okx-ai/SKILL.md",
+      "computedHash": "e48de1c58384557989e217e551facbc62185458a351050d128daed39357b0bec"
+    },
+    "okx-dapp-discovery": {
+      "source": "okx/onchainos-skills",
+      "sourceType": "github",
+      "skillPath": "skills/okx-dapp-discovery/SKILL.md",
+      "computedHash": "4d3af1024be7c17b853871c6f981cb47958b48730a7645d806038b3de1d5c59a"
+    },
+    "okx-defi": {
+      "source": "okx/onchainos-skills",
+      "sourceType": "github",
+      "skillPath": "skills/okx-defi/SKILL.md",
+      "computedHash": "5c7d47cca636fb09b5f804be731f5088641e272240041affb3ad97c904c18636"
+    },
+    "okx-dex-market": {
+      "source": "okx/onchainos-skills",
+      "sourceType": "github",
+      "skillPath": "skills/okx-dex-market/SKILL.md",
+      "computedHash": "4aac4b14a21a1e3eb80aa8750acb1eaec7b5f42284e8d2afafceb4640c348eec"
+    },
+    "okx-growth-competition": {
+      "source": "okx/onchainos-skills",
+      "sourceType": "github",
+      "skillPath": "skills/okx-growth-competition/SKILL.md",
+      "computedHash": "19e5b704dc977d487962bf4f0d2967ac1826b5374306077d1b35a79a7b063031"
+    },
+    "okx-guide": {
+      "source": "okx/onchainos-skills",
+      "sourceType": "github",
+      "skillPath": "skills/okx-guide/SKILL.md",
+      "computedHash": "c0746226d0cc2ca583cf7b8db52ebdb8ab9addafcb9cd52c62489ea63d0a3021"
+    }
+  }
+}

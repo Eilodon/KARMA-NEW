@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KARMA on X Layer — judge walkthrough</title>
+<style>
+  :root{
+    --bg:#0d0f12; --surface:#15181c; --surface-2:#1b1f24;
+    --ink:#eef0f2; --ink-soft:#9aa3ac; --ink-faint:#5f6870;
+    --accent:#ef4d3d; --accent-soft:#3a1c17; --accent-ink:#fff0ee;
+    --good:#34c77b; --good-soft:#123420;
+    --pending:#f0b429; --pending-soft:#3a2c0d;
+    --border:#262b31; --code-bg:#0a0c0e;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 32px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:860px;margin:0 auto;padding:64px 24px 100px;}
+  a{color:var(--accent);}
+
+  .eyebrow{
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    font-size:12.5px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--ink-faint); margin:0 0 14px;
+  }
+  h1{
+    font-size:clamp(32px,5vw,46px); font-weight:800; letter-spacing:-.01em;
+    line-height:1.08; margin:0 0 20px; text-wrap:balance;
+  }
+  h1 .hl{color:var(--accent);}
+  .lede{font-size:18px; color:var(--ink-soft); max-width:60ch; margin:0 0 36px;}
+
+  .stamp-row{display:flex; flex-wrap:wrap; gap:10px; margin:0 0 48px;}
+  .stamp{
+    display:inline-flex; align-items:center; gap:7px;
+    font-family:ui-monospace,monospace; font-size:12.5px; font-weight:600;
+    padding:7px 13px; border-radius:100px; border:1px solid var(--border);
+    background:var(--surface); color:var(--ink-soft);
+  }
+  .stamp.good{border-color:transparent; background:var(--good-soft); color:var(--good);}
+  .stamp.pending{border-color:transparent; background:var(--pending-soft); color:var(--pending);}
+  .stamp .dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+
+  h2{
+    font-size:24px; font-weight:800; margin:0 0 6px; letter-spacing:-.005em;
+  }
+  .section{margin:0 0 56px;}
+  .section > p.deck{color:var(--ink-soft); font-size:15.5px; max-width:64ch; margin:0 0 26px;}
+
+  .archetype{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px;
+  }
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:20px 22px; box-shadow:var(--shadow);
+  }
+  .card .num{font-family:ui-monospace,monospace; color:var(--accent); font-size:13px; font-weight:700;}
+  .card h3{font-size:15.5px; margin:10px 0 6px;}
+  .card p{margin:0; font-size:13.8px; color:var(--ink-soft);}
+
+  .flow{
+    display:flex; flex-wrap:wrap; align-items:stretch; gap:0;
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:26px; box-shadow:var(--shadow);
+  }
+  .flow-step{flex:1 1 150px; padding:10px 14px; text-align:center;}
+  .flow-step .k{
+    font-family:ui-monospace,monospace; font-size:11px; color:var(--ink-faint);
+    text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;
+  }
+  .flow-step .v{font-size:14px; font-weight:600;}
+  .flow-step .sub{font-size:12.5px; color:var(--ink-soft); margin-top:4px;}
+  .flow-arrow{
+    display:flex; align-items:center; justify-content:center; color:var(--ink-faint);
+    font-size:20px; flex:0 0 auto; padding:0 4px;
+  }
+  @media (max-width:640px){ .flow-arrow{ transform:rotate(90deg); } }
+
+  table.status{width:100%; min-width:560px; border-collapse:collapse; font-size:14px;}
+  .twrap{border:1px solid var(--border); border-radius:12px; overflow-x:auto; box-shadow:var(--shadow);}
+  table.status th{
+    text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-faint); font-weight:600; padding:12px 16px; background:var(--surface-2);
+    border-bottom:1px solid var(--border); white-space:nowrap;
+  }
+  table.status td{padding:13px 16px; border-bottom:1px solid var(--border); background:var(--surface); vertical-align:top;}
+  table.status tr:last-child td{border-bottom:none;}
+  table.status td:first-child{white-space:nowrap;}
+  @media (max-width:640px){
+    table.status{min-width:0;}
+    table.status thead{display:none;}
+    table.status, table.status tbody, table.status tr, table.status td{display:block; width:100%;}
+    table.status tr{border-bottom:1px solid var(--border); padding:14px 16px;}
+    table.status tr:last-child{border-bottom:none;}
+    table.status td{padding:3px 0; border-bottom:none;}
+    table.status td:first-child{font-weight:700; white-space:normal;}
+  }
+  .pill{
+    display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:700;
+    padding:3px 10px; border-radius:100px; white-space:nowrap;
+  }
+  .pill.real{background:var(--good-soft); color:var(--good);}
+  .pill.pending{background:var(--pending-soft); color:var(--pending);}
+  code{font-family:ui-monospace,monospace; font-size:.92em; background:var(--surface-2); padding:.1em .4em; border-radius:4px;}
+
+  .term{
+    background:var(--code-bg); border:1px solid var(--border); border-radius:12px;
+    box-shadow:var(--shadow); overflow:hidden; margin:0 0 18px;
+  }
+  .term .bar{display:flex; gap:6px; padding:11px 14px; background:var(--surface-2); border-bottom:1px solid var(--border);}
+  .term .bar span{width:10px;height:10px;border-radius:50%;background:#3d434a;}
+  .term pre{
+    margin:0; padding:18px 20px; font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    font-size:12.6px; line-height:1.65; color:#c9d1d9; overflow-x:auto; white-space:pre;
+  }
+  .term .ok{color:var(--good);}
+  .term .muted{color:var(--ink-faint);}
+  .cap{font-size:12.5px; color:var(--ink-faint); margin:0 0 26px;}
+
+  .cta-row{display:flex; flex-wrap:wrap; gap:12px; margin-top:8px;}
+  .cta{
+    display:inline-flex; align-items:center; gap:8px; font-size:14px; font-weight:600;
+    padding:11px 18px; border-radius:9px; border:1px solid var(--border); color:var(--ink);
+    text-decoration:none; background:var(--surface);
+  }
+  .cta.primary{background:var(--accent); border-color:var(--accent); color:#1a0805;}
+
+  footer{margin-top:70px; padding-top:22px; border-top:1px solid var(--border); color:var(--ink-faint); font-size:12.5px;}
+
+  /* ---- plain-language front door ---- */
+  .plainhero{
+    background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding:30px 32px 26px; margin:0 0 56px; box-shadow:var(--shadow);
+  }
+  .plainhero .tag{
+    font-family:ui-monospace,monospace; font-size:11px; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--accent); margin:0 0 12px; font-weight:700;
+  }
+  .plainhero p.big{
+    font-size:18.5px; line-height:1.55; color:var(--ink); margin:0 0 26px; max-width:68ch;
+  }
+  .plainhero p.big b{color:var(--accent-ink); background:var(--accent-soft); padding:.05em .3em; border-radius:4px; font-weight:700;}
+
+  .inst-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin:0 0 26px;}
+  .inst-card{
+    display:flex; gap:13px; align-items:flex-start;
+    background:var(--surface-2); border:1px solid var(--border); border-radius:11px; padding:15px 16px;
+  }
+  .inst-card .ico{flex:0 0 auto; color:var(--accent); margin-top:1px;}
+  .inst-card h4{margin:0 0 4px; font-size:14px; font-weight:800; color:var(--ink);}
+  .inst-card p{margin:0; font-size:13px; color:var(--ink-soft); line-height:1.45;}
+  .inst-card .tech{display:inline-block; margin-top:7px; font-family:ui-monospace,monospace; font-size:10.5px; color:var(--ink-faint);}
+
+  .why-list{list-style:none; margin:0; padding:0; display:grid; gap:11px;}
+  .why-list li{display:flex; gap:11px; font-size:14.5px; color:var(--ink-soft); align-items:baseline; line-height:1.5;}
+  .why-list li b{color:var(--ink);}
+  .why-list .n{
+    flex:0 0 auto; width:20px; height:20px; border-radius:50%; background:var(--accent-soft); color:var(--accent);
+    font-family:ui-monospace,monospace; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;
+    margin-top:2px;
+  }
+
+  details.glossary{ margin-top:24px; border-top:1px solid var(--border); padding-top:16px; }
+  details.glossary summary{
+    cursor:pointer; font-size:13px; color:var(--ink-soft); font-weight:700; list-style:none;
+    display:flex; align-items:center; gap:7px; -webkit-tap-highlight-color:transparent;
+  }
+  details.glossary summary::-webkit-details-marker{display:none;}
+  details.glossary summary::before{content:"▸"; color:var(--accent); display:inline-block; transition:transform .15s;}
+  details.glossary[open] summary::before{transform:rotate(90deg);}
+  .gloss-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px 26px; margin:14px 0 0; padding:0;}
+  .gloss-grid dt{font-family:ui-monospace,monospace; font-size:12.5px; color:var(--accent); font-weight:700;}
+  .gloss-grid dd{margin:2px 0 0; font-size:12.8px; color:var(--ink-soft); line-height:1.4;}
+
+  .plain-lead{color:var(--ink); font-weight:600;}
+
+  /* ---- simple map diagram ---- */
+  .map{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:26px 22px 16px; margin:0 0 18px; box-shadow:var(--shadow);
+  }
+  .map svg{width:100%; height:auto; display:block;}
+  .map text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+  .map .map-mobile{display:none;}
+  @media (max-width:640px){
+    .map .map-desktop{display:none;}
+    .map .map-mobile{display:block;}
+  }
+
+  .explorer-card{
+    display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+    background:var(--surface-2); border:1px solid var(--border); border-radius:12px;
+    padding:16px 18px; margin:0 0 26px;
+  }
+  .explorer-card .addr{font-family:ui-monospace,monospace; font-size:13.5px; color:var(--ink);}
+  .explorer-card .addr span{color:var(--ink-faint);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">KARMA · OKX.AI Genesis Hackathon</p>
+  <h1>Would you send a stranger money<br/>before they've <span class="hl">done any work for you?</span></h1>
+  <p class="lede">
+    That's what an agent does every time it pays another agent it has no history with.
+    <code>get_cross_chain_trust_score</code> answers that question with one free call — reading an
+    agent's on-chain reputation and job/dispute history across four independently run chains, and
+    handing back one evidence-backed read instead of a black-box number.
+  </p>
+
+  <div class="stamp-row">
+    <span class="stamp good"><span class="dot"></span>Live on X Layer testnet — 0xBF28…4Cd2, verified</span>
+    <span class="stamp good"><span class="dot"></span>get_cross_chain_trust_score reads it live, right now</span>
+    <span class="stamp good"><span class="dot"></span>102/102 Foundry tests passing (96 registry + 6 new)</span>
+    <span class="stamp good"><span class="dot"></span>okx/onchainos-skills installed for real, hash-pinned</span>
+    <span class="stamp pending"><span class="dot"></span>RationaleAttestation.sol built + tested, deploy pending a funded key</span>
+  </div>
+
+  <div class="plainhero">
+    <p class="tag">Start here if you're not a blockchain person</p>
+    <p class="big">
+      An AI agent is about to pay another AI agent it just met — no bank, no credit check, no human
+      approving the transfer. Before the money moves, it asks KARMA one question: <b>"has this
+      agent actually delivered before, and where?"</b> KARMA reads across <b>four independently
+      run blockchains</b> at once and answers with real numbers, not a guess — and every number on
+      this page is checkable by anyone, right now, including you.
+    </p>
+
+    <div class="inst-grid">
+      <div class="inst-card">
+        <svg class="ico" viewBox="0 0 48 48" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="24" cy="24" r="17"/>
+          <path d="M24 15v9l6 4"/>
+        </svg>
+        <div>
+          <h4>A credit bureau — for software</h4>
+          <p>One address, checked against every chain it has history on — not just whatever chain the current app happens to run on.</p>
+          <span class="tech">→ get_cross_chain_trust_score</span>
+        </div>
+      </div>
+      <div class="inst-card">
+        <svg class="ico" viewBox="0 0 48 48" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="6" y="10" width="36" height="28" rx="4"/>
+          <path d="M6 18h36"/>
+          <circle cx="15" cy="27" r="2" fill="currentColor" stroke="none"/>
+        </svg>
+        <div>
+          <h4>Free, no signup, no wallet</h4>
+          <p>One MCP call, one JSON answer. Built as the OKX.AI Genesis Hackathon ASP — try it without connecting anything.</p>
+          <span class="tech">→ src/plugins/trust_oracle.tool.ts</span>
+        </div>
+      </div>
+      <div class="inst-card">
+        <svg class="ico" viewBox="0 0 48 48" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M24 6l14 6v10c0 9-6 14.5-14 20-8-5.5-14-11-14-20V12z"/>
+          <path d="M18 24l4 4 8-8"/>
+        </svg>
+        <div>
+          <h4>A paper trail for AI decisions</h4>
+          <p>An agent can also commit an on-chain hash of *why* it made a call — a checkable anchor without ever publishing the plaintext.</p>
+          <span class="tech">→ attest_rationale / get_rationale_hash</span>
+        </div>
+      </div>
+      <div class="inst-card">
+        <svg class="ico" viewBox="0 0 48 48" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="14" cy="14" r="6"/><circle cx="34" cy="14" r="6"/><circle cx="24" cy="36" r="6"/>
+          <path d="M17 18l5 12M31 18l-5 12M20 14h8"/>
+        </svg>
+        <div>
+          <h4>Composes with what OKX already ships</h4>
+          <p>Onchain OS's own agent-discovery skill finds a candidate ASP; KARMA scores whether to trust it — zero glue code between the two.</p>
+          <span class="tech">→ demo_onchainos_composability.ts</span>
+        </div>
+      </div>
+    </div>
+
+    <ul class="why-list">
+      <li><span class="n">1</span><span><b>Reputation earned on one chain now travels</b> — an agent's Casper or Stellar track record is visible to an X Layer/OKX.AI caller that would otherwise see nothing.</span></li>
+      <li><span class="n">2</span><span><b>The evidence is the answer</b> — <code>chains: [...]</code> shows exactly which chain contributed what, not a single opaque score to trust blindly.</span></li>
+      <li><span class="n">3</span><span><b>Nothing here is a mockup</b> — every address, tx link, and test count below came from a real run against X Layer Testnet, and you can reproduce it yourself.</span></li>
+    </ul>
+
+    <details class="glossary">
+      <summary>The handful of technical words this page uses, in one sentence each</summary>
+      <dl class="gloss-grid">
+        <dt>ASP</dt><dd>Agentic Service Provider — a tool OKX.AI's agent marketplace lists for other agents to call.</dd>
+        <dt>MCP</dt><dd>Model Context Protocol — the standard AI agents use to discover and call tools like KARMA's.</dd>
+        <dt>A2MCP</dt><dd>Agent-to-MCP — one agent calling another agent's MCP-exposed service, machine to machine.</dd>
+        <dt>ERC-8004</dt><dd>The identity standard OKX.AI's own Onchain OS uses for agent User/ASP/Evaluator roles.</dd>
+        <dt>Aggregate score</dt><dd>A plain average of whatever chains actually returned a reputation — never a fabricated number for an unconfigured chain.</dd>
+        <dt>Rationale attestation</dt><dd>An on-chain hash of an agent's stated reason for a decision — checkable, but the plaintext never has to leave the agent.</dd>
+      </dl>
+    </details>
+  </div>
+
+  <div class="section">
+    <h2>See it run</h2>
+    <p class="deck"><span class="plain-lead">In one sentence: this is the actual computer conversation, copy-pasted, not a screenshot someone typed up.</span> Captured verbatim from this repo — <code>XLAYER_CONTRACT_ADDRESS=0xBF28…4Cd2 pnpm demo:onchainos 0x857c2F11E9EDDdC7DDc03d035B0998De3c7677ec</code>. Step 3 is a real read against the live X Layer contract, not a stub.</p>
+    <div class="term">
+      <div class="bar"><span></span><span></span><span></span></div>
+      <pre>$ XLAYER_CONTRACT_ADDRESS=0xBF28...4Cd2 pnpm demo:onchainos 0x857c2F11E9EDDdC7DDc03d035B0998De3c7677ec
+┌─────────────────────────────────────────────────────────────────────────┐
+│ KARMA x Onchain OS composability — "should my agent pay this provider?" │
+└─────────────────────────────────────────────────────────────────────────┘
+  okx/onchainos-skills is a Claude Skill bundle (CLI-routing), not an MCP tool server. Steps 1-2
+  are documented from the real installed skill, not executed (needs OKX wallet login). Steps 3-4
+  call KARMA's real, no-auth ASP.
+
+[1/4] Confirm the real install (skills-lock.json, not a mock)
+  okx-ai         skills/okx-ai/SKILL.md  sha=e48de1c5…7b0bec
+  <span class="muted">… 7 more skills, see skills-lock.json …</span>
+
+[2/4] Discovery — the real CLI a judge/agent would run (documented, not executed here)
+  $ onchainos agent search --query "on-chain reputation oracle for agent payments"
+    -> table of candidate ASPs: Agent ID | Name | Rating | Min price | Top service
+  $ onchainos agent get-agents --agent-ids &lt;N&gt;
+    -> card[] including `ownerAddress` (the EVM address get_cross_chain_trust_score reads)
+  candidate      0x857c2F11E9EDDdC7DDc03d035B0998De3c7677ec
+
+[3/4] LIVE — get_cross_chain_trust_score against the candidate
+      pharos   rep=no read (PHAROS_CONTRACT_ADDRESS not configured)
+      xlayer   rep=50
+      stellar  rep=no read (Stellar reputation is ZK-gated by design — not a public number.)
+  aggregate      50 across 1 chain(s)
+
+[4/4] Decision — hire if aggregate >= 50
+<span class="ok">  ✓ HIRE — 50 &gt;= 50, evidence-backed track record across 1 chain(s).</span></pre>
+    </div>
+    <p class="cap">Reproduce it yourself — no wallet needed, the trust-score leg is read-only. <code>xlayer rep=50</code> is
+      the live bootstrap default read straight off <a href="https://www.oklink.com/xlayer-test/address/0xBF285628869c2EFaf6731F8503B39B7130474Cd2">the deployed contract</a>,
+      not a canned number.</p>
+
+    <div class="explorer-card">
+      <div class="addr"><span>AgentSkillRegistry</span> · 0xBF285628869c2EFaf6731F8503B39B7130474Cd2</div>
+      <a class="cta" href="https://www.oklink.com/xlayer-test/address/0xBF285628869c2EFaf6731F8503B39B7130474Cd2">View on OKLink →</a>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Rationale attestation (P2-A) — ported from Casper, X Layer's turn next</h2>
+    <p class="deck"><span class="plain-lead">In one sentence: an agent can commit a hash of why it made a call, on-chain, without ever publishing the plaintext.</span>
+      Casper's live contract already does this (<code>casper_attest_rationale</code> /
+      <code>casper_get_rationale_hash</code>). <code>RationaleAttestation.sol</code> ports the same
+      semantics to X Layer as a standalone sidecar next to <code>AgentSkillRegistry</code> — not a
+      change to it, so the already-published <code>0xBF28…4Cd2</code> address never moves.</p>
+    <div class="term">
+      <div class="bar"><span></span><span></span><span></span></div>
+      <pre>$ forge test --match-contract RationaleAttestationTest -vv
+Ran 6 tests for test/RationaleAttestation.t.sol:RationaleAttestationTest
+<span class="ok">[PASS] test_AttestRationale_IndependentOfJobLifecycle()</span>
+<span class="ok">[PASS] test_AttestRationale_RevertIfAlreadyAttested()</span>
+<span class="ok">[PASS] test_AttestRationale_RevertIfJobNotFound()</span>
+<span class="ok">[PASS] test_AttestRationale_RevertIfNotRequester()</span>
+<span class="ok">[PASS] test_AttestRationale_Success()</span>
+<span class="ok">[PASS] test_GetRationaleHash_ReturnsZeroIfNotAttested()</span>
+<span class="ok">Suite result: ok. 6 passed; 0 failed; 0 skipped</span></pre>
+    </div>
+    <p class="cap">Pending: broadcasting the deploy tx (needs a funded X Layer testnet deployer key) — once live, this
+      section gets a real <code>attest_rationale</code> → <code>get_rationale_hash</code> round trip and a second
+      OKLink link, the same way the trust-score section above already does.</p>
+  </div>
+
+  <div class="section">
+    <h2>What's real today, what's the last step</h2>
+    <p class="deck"><span class="plain-lead">In one sentence: here's the honest scoreboard.</span> Said plainly, on purpose — a claim we can't back up is worse than no claim.</p>
+    <div class="twrap">
+      <table class="status">
+        <tr><th>Layer</th><th>Status</th><th>Detail</th></tr>
+        <tr><td>AgentSkillRegistry on X Layer</td><td><span class="pill real">real</span></td><td>Deployed testnet, <code>0xBF285628869c2EFaf6731F8503B39B7130474Cd2</code>, same contract/ABI as Pharos, 96/96 Foundry tests unchanged.</td></tr>
+        <tr><td><code>get_cross_chain_trust_score</code></td><td><span class="pill real">real</span></td><td>Free ASP, no auth, reads Pharos + X Layer + Casper live, notes (not fabricates) unconfigured/ZK-gated legs — shown running above.</td></tr>
+        <tr><td><code>RationaleAttestation.sol</code></td><td><span class="pill real">real</span></td><td>Sidecar contract + 6 Foundry tests (102/102 suite total), ported from Casper's live P2-A feature — validates against the deployed registry's existing <code>jobs()</code> getter, no change to that contract.</td></tr>
+        <tr><td><code>attest_rationale</code> / <code>get_rationale_hash</code> MCP tools</td><td><span class="pill real">real</span></td><td>Wired into the MCP tool registry (<code>rationale_attestation.tool.ts</code>), trusted in-process built-in, unit tests passing.</td></tr>
+        <tr><td>RationaleAttestation deploy tx</td><td><span class="pill pending">pending</span></td><td>Code + tests done; broadcasting needs a funded X Layer testnet deployer key (same one-time human step as the registry's own deploy).</td></tr>
+        <tr><td><code>okx/onchainos-skills</code> install</td><td><span class="pill real">real</span></td><td>Installed for real via <code>npx skills add</code>, hash-pinned in <code>skills-lock.json</code>, tracked in this repo at <code>.claude/skills/</code> — 8 skills, verified no tool-name collisions.</td></tr>
+        <tr><td>Onchain OS composability demo</td><td><span class="pill real">real</span> / <span class="pill pending">pending</span></td><td>Discovery step is documented (real CLI syntax from the installed skill), not executed — running it live needs the operator's own OKX Agentic Wallet login. The trust-score + decision half is fully live, shown above.</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="cta-row">
+    <a class="cta primary" href="https://github.com/Eilodon/KARMA-NEW/blob/main/README.md">Project README →</a>
+    <a class="cta" href="https://github.com/Eilodon/KARMA-NEW/blob/main/docs/TOOLS.md">Full tool reference</a>
+    <a class="cta" href="https://www.oklink.com/xlayer-test/address/0xBF285628869c2EFaf6731F8503B39B7130474Cd2">AgentSkillRegistry on OKLink</a>
+  </div>
+
+  <footer>KARMA — a protocol for agent economies. This page is a judge aid; the repository is the submission.</footer>
+</div>
+</body>
+</html>

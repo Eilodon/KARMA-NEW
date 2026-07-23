@@ -124,3 +124,46 @@ Covered directly in `README.md` — this is the ASP built for the OKX.AI Genesis
 | Tool | Kind | Purpose |
 |---|---|---|
 | `get_cross_chain_trust_score` | read | Given an `evm_address` (Pharos + X Layer share one secp256k1 key) and/or a `casper_account_hash`, reads on-chain reputation + job counts from every configured chain, averages what's available into `aggregateScore`, and reports a `note` (not a fabricated number) for any chain that's unconfigured or, for Stellar, intentionally ZK-gated. |
+
+## Rationale Attestation (X Layer) — `rationale_attestation.tool.ts`
+
+P2-A, ported from Casper's `casper_attest_rationale`/`casper_get_rationale_hash` (see the Casper
+table above). Backed by `RationaleAttestation.sol`, a standalone sidecar deployed next to
+`AgentSkillRegistry` — not a change to it, so the published, evidence-referenced registry address
+never moves. It validates `jobId`/`requester` by reading the registry's existing public `jobs`
+getter, which is why no function needed to be added to the live contract.
+
+| Tool | Kind | Purpose |
+|---|---|---|
+| `attest_rationale` | write | Requester commits a 32-byte hash of their agent's decision rationale on-chain for a job, once. Requester-only, set-once, independent of job lifecycle. |
+| `get_rationale_hash` | read | Read back an attested rationale hash byte-for-byte, live from chain; `null` if never attested. |
+
+## Composability with Onchain OS (`okx/onchainos-skills`)
+
+Unlike the Casper composability case above, `okx/onchainos-skills` is **not** a second MCP server —
+verified in-session by cloning the real repo, not assumed. It's a Claude Skill bundle (`SKILL.md`
+routing files, installed for real at `.claude/skills/`, hash-pinned in `skills-lock.json`) that
+teaches an agent when to shell out to a bundled Rust CLI (`onchainos`), gated behind an OKX
+Agentic Wallet login before any command. There is no `onchainos` MCP server binary to add to an
+`mcpServers` block the way `casper-mcp` is — so the same-shape JSON block the Casper section above
+uses doesn't apply here; the honest equivalent is one agent session with both surfaces loaded at
+once:
+
+```json
+{
+  "mcpServers": {
+    "karma": { "command": "node", "args": ["/path/to/KARMA-Eilodon/dist/index.js"] }
+  }
+}
+```
+
+...running in the same agent that also has `okx/onchainos-skills` installed
+(`npx skills add okx/onchainos-skills --yes -a claude-code --skill '*'` — already done for this
+repo, see `skills-lock.json`). The agent chains them with zero custom integration code: Onchain
+OS's `okx-ai` skill routes `agent search`/`agent get-agents` (real CLI syntax, see
+`.claude/skills/okx-ai/references/identity-discover.md`) to find a candidate ASP's `ownerAddress`,
+then `get_cross_chain_trust_score` reads that address's cross-chain track record before the agent
+decides whether to pay it — `src/scripts/demo_onchainos_composability.ts`
+(`pnpm demo:onchainos <candidateEvmAddress>`) runs the live half of that pipeline end to end
+(discovery is documented, not executed, since it needs the operator's own OKX wallet credentials —
+see that script's header for why faking it would misrepresent the integration).

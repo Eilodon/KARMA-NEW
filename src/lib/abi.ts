@@ -162,3 +162,22 @@ export const agentSkillRegistryAbi = [
   { type: "event", name: "OwnershipTransferred", inputs: [{ name: "previousOwner", type: "address", indexed: true }, { name: "newOwner", type: "address", indexed: true }] },
   { type: "event", name: "OwnershipTransferStarted", inputs: [{ name: "previousOwner", type: "address", indexed: true }, { name: "newOwner", type: "address", indexed: true }] },
 ] as const;
+
+/**
+ * Typed ABI for RationaleAttestation.sol — a standalone sidecar next to AgentSkillRegistry
+ * (P2-A, ported from Casper's attest_rationale/get_rationale_hash). Kept in its own const,
+ * separate from agentSkillRegistryAbi above, since it's a different deployed contract at a
+ * different address (XLAYER_RATIONALE_ATTESTATION_ADDRESS) — never merge the two ABIs.
+ */
+export const rationaleAttestationAbi = [
+  { type: "constructor", stateMutability: "nonpayable", inputs: [{ name: "registryAddress", type: "address" }] },
+  { type: "function", name: "registry", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "address" }] },
+  { type: "function", name: "attestRationale", stateMutability: "nonpayable", inputs: [{ name: "jobId", type: "uint256" }, { name: "hash", type: "bytes32" }], outputs: [] },
+  { type: "function", name: "getRationaleHash", stateMutability: "view", inputs: [{ name: "jobId", type: "uint256" }], outputs: [{ name: "", type: "bytes32" }] },
+  { type: "function", name: "rationaleHash", stateMutability: "view", inputs: [{ name: "", type: "uint256" }], outputs: [{ name: "", type: "bytes32" }] },
+  { type: "function", name: "attested", stateMutability: "view", inputs: [{ name: "", type: "uint256" }], outputs: [{ name: "", type: "bool" }] },
+  { type: "event", name: "RationaleAttested", inputs: [{ name: "jobId", type: "uint256", indexed: true }, { name: "requester", type: "address", indexed: true }, { name: "rationaleHash", type: "bytes32", indexed: false }] },
+  { type: "error", name: "JobNotFound", inputs: [{ name: "jobId", type: "uint256" }] },
+  { type: "error", name: "NotRequester", inputs: [{ name: "jobId", type: "uint256" }, { name: "caller", type: "address" }] },
+  { type: "error", name: "RationaleAlreadyAttested", inputs: [{ name: "jobId", type: "uint256" }] },
+] as const;

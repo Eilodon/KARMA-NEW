@@ -18,6 +18,10 @@ keystore.*.bak
 # MCP server config below actually reaches web sessions too.
 !.claude/hooks/
 !.claude/settings.json
+# Real `npx skills add okx/onchainos-skills` install (see skills-lock.json + demo_onchainos_
+# composability.ts) — tracked so a reviewer gets the identical, hash-pinned skill files on
+# clone instead of having to install them themselves before the composability demo lines up.
+!.claude/skills/
 
 # Autonomous-loop runtime dashboard output (T5.1 runner)
 dashboard/
