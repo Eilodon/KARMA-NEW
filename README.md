@@ -81,11 +81,10 @@ Call `get_cross_chain_trust_score({ evm_address: "0x..." })` from any MCP client
 | Onchain OS `okx-ai` skill (ERC-8004 identity) | Same EVM address, so reputation earned on Casper/Stellar/Pharos becomes visible to an X Layer/OKX.AI caller that would otherwise see nothing | [`src/plugins/trust_oracle.tool.ts`](src/plugins/trust_oracle.tool.ts) |
 | X Layer | `AgentSkillRegistry` deployed live on testnet, plus a `RationaleAttestation` sidecar for on-chain decision provenance | [`contracts/`](contracts/), [`script/deploy_xlayer.sh`](script/deploy_xlayer.sh) |
 | Agentic Wallet + x402 (`@x402/evm`) | Per-call settlement rail, built and tested | [`src/plugins/x402_xlayer.ts`](src/plugins/x402_xlayer.ts) |
-| `okx/onchainos-skills` | Installed for real (not mocked), hash-pinned in [`skills-lock.json`](skills-lock.json), and composed live with `get_cross_chain_trust_score` in the same agent session | [`src/scripts/demo_onchainos_composability.ts`](src/scripts/demo_onchainos_composability.ts), [docs/TOOLS.md](docs/TOOLS.md#composability-with-onchain-os-okxonchainos-skills) |
+| `okx/onchainos-skills` | Installed for real (not mocked), hash-pinned in [`skills-lock.json`](skills-lock.json). The trust-score half of the pipeline runs live against `get_cross_chain_trust_score`; the discovery half is documented with the real CLI syntax but not executed — see [Known limitations](#known-limitations) | [`src/scripts/demo_onchainos_composability.ts`](src/scripts/demo_onchainos_composability.ts), [docs/TOOLS.md](docs/TOOLS.md#composability-with-onchain-os-okxonchainos-skills) |
 
-The demo itself stays small on purpose: one free tool, one call, one JSON answer with the evidence
-attached. No payment flow, no wallet funding, no multi-step negotiation required to try it — the
-depth below is there for anyone who wants to look further.
+The integration surface above is what's actually wired up; the depth below — architecture, tests,
+deployments — is there for anyone who wants to look further.
 
 ### Live deployments
 
@@ -148,8 +147,9 @@ comparison:
 - **Sybil- and wash-trading-resistant reputation.** An arm's-length guard means dealing with
   yourself earns zero reputation; an EigenTrust-lite flow ranking runs off-chain, value-weighted
   and decaying over time; an optional on-chain capital bond backs it further.
-- **Non-repudiation and bounded authority**, on chains Terminal3 gates. Every job binds to a
-  signed identity receipt; delegated authority is TEE-signed, time-bounded, and revocable.
+- **Non-repudiation and bounded authority**, on chains Terminal3 (a SIWE-based third-party
+  identity/session SDK) gates. Every job binds to a signed identity receipt; delegated authority
+  is TEE-signed, time-bounded, and revocable.
 - **Drafted as a standard.** The identity/reputation/escrow/dispute interface is a Casper
   Enhancement Proposal ([CEP-0000](docs/standards/CEP-0000-agent-skill-trust-registry.md))
   covering every entry point, event, and state transition, so another implementation can adopt the
