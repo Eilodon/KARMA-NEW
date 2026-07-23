@@ -12,7 +12,7 @@ crate-type = ["cdylib", "rlib"]
 # Pin EXACT version (=2.8.1) to prevent silent Odra-macros churn between local builds and CI
 # (the risk register flagged this as Odra version churn — mitigation: pin in Cargo.toml).
 # Bump deliberately; do not relax to a caret range.
-odra = { version = "=2.8.2", default-features = false }
+odra = { version = "=2.9.0", default-features = false }
 # CEP-18 + CEP-3009 (EIP-712 transfer_with_authorization) building blocks for the x402 settlement
 # token — same Odra team, same version pin as `odra` itself. See
 # docs/rfc/2026-07-21-x402-casper-eip712-interop.md §5.0.
