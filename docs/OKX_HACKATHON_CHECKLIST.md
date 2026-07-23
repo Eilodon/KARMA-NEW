@@ -59,16 +59,48 @@ and its `get_cross_chain_trust_score` tool:
       still 27/7 23:59 UTC on the official page before you submit (it moved once already, from an
       earlier 17/7 announcement).
 
-## 7. Optional, parallel, not gated on Genesis results
+## 7. Register as an Evaluator too (bonus mũi — OKX explicitly invites this)
 
-- [ ] **X Layer's early-stage team accelerator** — real (per X Layer's own materials: "turning
-      early ideas into real products... handpicking high-potential teams"), but flag before you
-      spend time on it: a plain web search for **"Find Super Nova"** mostly surfaces **OKX
-      Supernova**, which is OKX's graduate/career recruitment program, not startup funding — a
-      different thing wearing a similar name. I could not independently verify a "Find Super
-      Nova" application URL distinct from that. Check `web3.okx.com/xlayer` directly for the
-      accelerator's real application path before assuming the name/link from earlier research is
-      accurate.
+Confirmed straight from `okx.ai/tutorial`: OKX.AI has a third role beyond Users/ASP — **Evaluator**
+(dispute arbitrator). Each arbitration is decided by ≥5 evaluators, majority vote, weighted-random
+selection by stake (≥100 OKB), 24/7 uptime required, wrong/timed-out votes get slashed, the
+majority splits 5% of the bounty plus the slashed stakes. Critically, their own docs say: **"Default
+Evaluator Skills ship in the box; write your own to judge sharper."** — that's a direct invitation,
+not a stretch.
+
+- [ ] Register as an Evaluator (stake ≥100 OKB — real capital at risk, decide deliberately) via
+      the same conversational flow: ask your agent something like
+      `Help me register as an Evaluator on OKX.AI using Onchain OS`, and let it reveal the actual
+      custom-Evaluator-Skill plugin schema (not publicly documented as of this pivot — this is the
+      one piece that genuinely needs the live flow to confirm, same as ASP registration did).
+- [ ] Once you see that schema: wire `get_cross_chain_trust_score` in as one input signal to your
+      custom Evaluator Skill's vote — e.g. weight toward the delivered-result claim when the
+      provider has a clean multi-chain track record, flag for closer manual review when it
+      doesn't. This reuses the Trust Oracle already built; it does not need new judgment-algorithm
+      code, and it's honest about what KARMA has today (evidence-gathering, not an automated
+      verdict).
+
+## 8. Apply to Find Super Nova (verified real, independent of Genesis results)
+
+Verified directly at `web3.okx.com/xlayer/build-x-series/supernova` (a correction to the previous
+version of this checklist, which wrongly cast doubt on this — a generic web search surfaced OKX's
+unrelated graduate-recruitment "Supernova" program instead of finding this page): "Got an
+early-stage project? Apply anytime." Five support pillars: ecosystem access, distribution priority
+into OKX Wallet/DEX/Marketplace, 1:1 mentorship with the X Layer team, VC funding-pipeline access,
+media amplification. Review turnaround ~1-2 weeks, milestone-based support after that.
+
+- [ ] Apply at `web3.okx.com/xlayer/build-x-series/supernova` — do this regardless of the Genesis
+      outcome, it's explicitly not gated on hackathon results.
+
+## 9. Seed real usage (needed for Revenue Rocket / Social Buzz, not needed for Software Utility)
+
+This is optional and only matters if you want to also compete in the traction-based categories —
+skip it if you're targeting Software Utility/Finance Copilot alone. It requires reaching out to
+other people, which this session won't do on your behalf:
+- [ ] Consider inviting 1-2 other Genesis builders (the analysis that prompted this checklist
+      specifically suggested VETO's author — a complementary, not competing, ASP) to try the Trust
+      Oracle for real, so any revenue/traction numbers in the submission are real usage, not
+      self-generated calls.
 
 ---
 

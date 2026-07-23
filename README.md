@@ -23,11 +23,13 @@
 
 ## Fit to the OKX.AI Genesis Hackathon
 
-**The gap:** OKX.AI's own ASP flow already gives agents escrow (A2A) and an arbitration path when
-a user disputes a result — but arbitration needs a track record to arbitrate *against*, and neither
-escrow nor arbitration alone tells a requester anything about a provider's history *before* the job
-starts. KARMA is that missing pre-trade signal: cross-chain reputation, not just single-chain
-escrow.
+**The gap:** OKX.AI already has real dispute resolution — escrow (A2A), and when a result is
+rejected, arbitration by ≥5 staked Evaluators (≥100 OKB each), majority vote, weighted-random
+selection, wrong/timed-out votes slashed (verified at `okx.ai/tutorial`). That's a good *after-the-
+fact* mechanism. What it doesn't give a requester, or an Evaluator, is a signal *before* the job —
+or *before* the vote — about whether this particular agent has actually delivered before, anywhere.
+KARMA is that missing pre-trade (and pre-vote) signal: cross-chain reputation, not a replacement for
+escrow or arbitration.
 
 | Category (Recommended target) | Why KARMA fits | Evidence in this repo |
 |---|---|---|
@@ -35,6 +37,31 @@ escrow.
 | **Finance Copilot** (secondary) | Counterparty risk scoring is a finance-copilot primitive — "should I let my agent pay this provider" | Same tool; `aggregateScore` is an evidence-backed risk read, not a black-box output |
 | OKX ecosystem integration | Agentic Wallet, Onchain OS `okx-ai`/`okx-agent-payments-protocol` skills, X Layer, x402 (OKX Payment SDK path via `@x402/evm`) | `src/lib/xlayer.ts` (viem client, chainId 1952/196), `src/plugins/x402_xlayer.ts` (`IPaymentPlugin`, `@x402/evm`'s `ExactEvmClient`/`toClientEvmSigner`), `script/deploy_xlayer.sh` |
 | Technical depth (judged separately from "is it live on X Layer yet") | Same contract, same test suite, same escrow/dispute/reputation kernel already proven on two other chains — X Layer is a chain *adapter*, not a rewrite | `contracts/AgentSkillRegistry.sol` (96/96 Foundry tests, unchanged), `docs/standards/IPaymentPlugin-v1.md` |
+
+**One product, plus one bonus — not spread thin.** The main submission is the Trust Oracle above.
+OKX.AI has a third registrable role beyond Users/ASP — **Evaluator** (dispute arbitrator: ≥5
+staked evaluators per case, majority vote, ≥100 OKB stake, wrong/timed-out votes slashed) — and
+their own tutorial says outright: *"Default Evaluator Skills ship in the box; write your own to
+judge sharper."* The bonus isn't a second, competing product (a parallel arbitration marketplace
+would just duplicate what OKX already runs, and read as not having understood their system) — it's
+feeding `get_cross_chain_trust_score` into a custom Evaluator Skill as one voting signal: an
+Evaluator whose vote is informed by the disputed agent's real cross-chain track record, not just
+the single job in front of it. Registering as an Evaluator and writing that skill is documented as
+the next concrete step in [`docs/OKX_HACKATHON_CHECKLIST.md`](docs/OKX_HACKATHON_CHECKLIST.md)
+(§7) — it needs the live registration flow to reveal OKX's actual Evaluator Skill plugin schema
+(not publicly documented anywhere found during this pivot), the same way ASP registration is
+conversational rather than a fixed API.
+
+**Self-audit — one real gap, disclosed, not fixed under deadline pressure:**
+`aggregateScore` (`src/plugins/trust_oracle.tool.ts`) is a plain, equal-weighted average of
+whichever chains return a number. That's honest about *what data exists*, but it isn't the trust
+model the rest of KARMA already uses elsewhere — single-chain reputation is computed with an
+EigenTrust-lite flow ranking that decays over time and downweights thin history (see
+[Why KARMA](#why-karma)); an agent with 1 job on X Layer counts exactly as much as one with 200
+jobs on Casper in today's cross-chain average. The fix is straightforward (weight each chain's
+contribution by its job count, decayed) but wasn't worth rushing into untested code days before a
+deadline; `jobsAsProvider`/`jobsAsRequester` are already returned per chain in the tool's output
+specifically so a caller can apply that judgment themselves until the aggregate does it natively.
 
 **Honest status, on purpose** (this repo doesn't claim things it hasn't run): the X Layer chain
 adapter, x402 payment plugin, and Trust Oracle tool are built, typechecked, and unit-tested
@@ -202,6 +229,12 @@ Not competitors — each piece solves a different layer, and none of them solve 
 | x402 | Payment scheme — how money moves for a call | Trust — no identity, reputation, dispute |
 | ERC-8004 | Identity + a pointer to reputation | Settlement — no escrow, no payment rail |
 | **KARMA** | **Identity + reputation + dispute resolution, wired to settlement, spoken over MCP** | — |
+
+This isn't abstract for OKX.AI specifically: OKX is reported (OKX Ventures' own research
+coverage; not independently confirmed against primary dev docs during this pivot, so stated with
+that caveat) to have integrated ERC-8004 on-chain agent identity on X Layer. If accurate, KARMA
+isn't proposing a standard next to a hypothetical one — it's extending exactly the settlement gap
+ERC-8004 leaves open, on the same chain OKX already put it on.
 
 Full comparison: [docs/standards/relation-to-adjacent-standards.md](docs/standards/relation-to-adjacent-standards.md).
 
