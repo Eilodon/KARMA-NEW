@@ -5,8 +5,10 @@ import { XLayerX402Plugin, xLayerX402PaymentOption } from "../plugins/x402_xlaye
 const FACILITATOR = "https://facilitator.okx.ai";
 const TESTNET = "eip155:1952";
 const MAINNET = "eip155:196";
-const TEST_USDC = "0x1111111111111111111111111111111111111111";
-const MAIN_USDC = "0x2222222222222222222222222222222222222222";
+// OKX AI settles in USDT or USDG, not USDC — these are deliberately generic test addresses,
+// not real token addresses, matching how the plugin itself stays asset-agnostic.
+const TEST_ASSET = "0x1111111111111111111111111111111111111111";
+const MAIN_ASSET = "0x2222222222222222222222222222222222222222";
 
 const TEST_ACCOUNT = privateKeyToAccount(`0x${"01".repeat(32)}` as `0x${string}`);
 
@@ -25,52 +27,52 @@ describe("XLayerX402Plugin metadata (OKX.AI Genesis Hackathon)", () => {
 });
 
 describe("XLayerX402Plugin.quote", () => {
-  it("converts a decimal price into USDC smallest units (6 decimals)", async () => {
+  it("converts a decimal price into smallest units (6 decimals — USDT/USDG both use 6)", async () => {
     const p = newPlugin();
-    const q = await p.quote({ skillId: "1", price: "0.01", asset: TEST_USDC, payTo: "0xpayee", network: TESTNET });
+    const q = await p.quote({ skillId: "1", price: "0.01", asset: TEST_ASSET, payTo: "0xpayee", network: TESTNET });
     expect(q.rail).toBe("x402");
     expect(q.network).toBe(TESTNET);
-    expect(q.price).toBe("10000"); // 0.01 USDC × 10^6
+    expect(q.price).toBe("10000"); // 0.01 × 10^6
     expect(q.facilitatorUrl).toBe(FACILITATOR);
   });
 
   it("passes through a pre-formatted smallest-unit string unchanged", async () => {
     const p = newPlugin();
-    const q = await p.quote({ skillId: "1", price: "250000", asset: TEST_USDC, payTo: "0xpayee", network: TESTNET });
+    const q = await p.quote({ skillId: "1", price: "250000", asset: TEST_ASSET, payTo: "0xpayee", network: TESTNET });
     expect(q.price).toBe("250000");
   });
 
   it("rejects an unsupported network", async () => {
     const p = newPlugin();
     await expect(
-      p.quote({ skillId: "1", price: "0.01", asset: TEST_USDC, payTo: "0xpayee", network: "stellar:testnet" }),
+      p.quote({ skillId: "1", price: "0.01", asset: TEST_ASSET, payTo: "0xpayee", network: "stellar:testnet" }),
     ).rejects.toThrow(/unsupported network/);
   });
 
   describe("default asset resolution (env-gated, no hardcoded contract address)", () => {
     const ORIGINAL = { ...process.env };
     beforeEach(() => {
-      process.env.XLAYER_USDC_TESTNET_ADDRESS = TEST_USDC;
-      process.env.XLAYER_USDC_ADDRESS = MAIN_USDC;
+      process.env.XLAYER_SETTLEMENT_ASSET_TESTNET_ADDRESS = TEST_ASSET;
+      process.env.XLAYER_SETTLEMENT_ASSET_ADDRESS = MAIN_ASSET;
     });
     afterEach(() => {
       process.env = { ...ORIGINAL };
     });
 
-    it("resolves the per-network USDC address from env when asset is omitted", async () => {
+    it("resolves the per-network settlement asset from env when asset is omitted", async () => {
       const p = newPlugin();
       const qTest = await p.quote({ skillId: "1", price: "0.01", asset: "", payTo: "0xpayee", network: TESTNET });
       const qMain = await p.quote({ skillId: "1", price: "0.01", asset: "", payTo: "0xpayee", network: MAINNET });
-      expect(qTest.asset).toBe(TEST_USDC);
-      expect(qMain.asset).toBe(MAIN_USDC);
+      expect(qTest.asset).toBe(TEST_ASSET);
+      expect(qMain.asset).toBe(MAIN_ASSET);
     });
 
     it("throws instead of guessing when the env var is unset", async () => {
-      delete process.env.XLAYER_USDC_TESTNET_ADDRESS;
+      delete process.env.XLAYER_SETTLEMENT_ASSET_TESTNET_ADDRESS;
       const p = newPlugin();
       await expect(
         p.quote({ skillId: "1", price: "0.01", asset: "", payTo: "0xpayee", network: TESTNET }),
-      ).rejects.toThrow(/XLAYER_USDC_TESTNET_ADDRESS/);
+      ).rejects.toThrow(/XLAYER_SETTLEMENT_ASSET_TESTNET_ADDRESS/);
     });
   });
 });
@@ -79,7 +81,7 @@ describe("XLayerX402Plugin.pay", () => {
   it("uses the agent's viem account to build the signer and returns a receipt", async () => {
     const p = newPlugin();
     const receipt = await p.pay(
-      { skillId: "1", price: "0.01", asset: TEST_USDC, payTo: "0xpayee0000000000000000000000000000000000", network: TESTNET },
+      { skillId: "1", price: "0.01", asset: TEST_ASSET, payTo: "0xpayee0000000000000000000000000000000000", network: TESTNET },
       { agentId: "agent-alpha" },
     );
     expect(receipt.rail).toBe("x402");
@@ -97,7 +99,7 @@ describe("XLayerX402Plugin.pay", () => {
     });
     await expect(
       p.pay(
-        { skillId: "1", price: "0.01", asset: TEST_USDC, payTo: "0xpayee", network: "stellar:testnet" },
+        { skillId: "1", price: "0.01", asset: TEST_ASSET, payTo: "0xpayee", network: "stellar:testnet" },
         { agentId: "agent-alpha" },
       ),
     ).rejects.toThrow(/unsupported network/);
@@ -110,7 +112,7 @@ describe("XLayerX402Plugin.pay", () => {
     });
     await expect(
       p.pay(
-        { skillId: "1", price: "0.01", asset: TEST_USDC, payTo: "0xpayee", network: TESTNET },
+        { skillId: "1", price: "0.01", asset: TEST_ASSET, payTo: "0xpayee", network: TESTNET },
         { agentId: "agent-zeta" },
       ),
     ).rejects.toThrow(/not found/);
@@ -123,7 +125,7 @@ describe("XLayerX402Plugin.verify", () => {
     payer: TEST_ACCOUNT.address,
     payee: "0xpayee0000000000000000000000000000000000",
     amount: "10000",
-    asset: TEST_USDC,
+    asset: TEST_ASSET,
     network: TESTNET,
     facilitatorRef: FACILITATOR,
   };
@@ -158,21 +160,21 @@ describe("XLayerX402Plugin.verify", () => {
 describe("xLayerX402PaymentOption", () => {
   const ORIGINAL = { ...process.env };
   beforeEach(() => {
-    process.env.XLAYER_USDC_TESTNET_ADDRESS = TEST_USDC;
-    process.env.XLAYER_USDC_ADDRESS = MAIN_USDC;
+    process.env.XLAYER_SETTLEMENT_ASSET_TESTNET_ADDRESS = TEST_ASSET;
+    process.env.XLAYER_SETTLEMENT_ASSET_ADDRESS = MAIN_ASSET;
   });
   afterEach(() => {
     process.env = { ...ORIGINAL };
   });
 
-  it("defaults to testnet/USDC", () => {
+  it("defaults to testnet", () => {
     const opt = xLayerX402PaymentOption();
-    expect(opt).toEqual({ rail: "x402", network: TESTNET, asset: TEST_USDC });
+    expect(opt).toEqual({ rail: "x402", network: TESTNET, asset: TEST_ASSET });
   });
 
   it("respects the network override", () => {
     const opt = xLayerX402PaymentOption(MAINNET);
     expect(opt.network).toBe(MAINNET);
-    expect(opt.asset).toBe(MAIN_USDC);
+    expect(opt.asset).toBe(MAIN_ASSET);
   });
 });

@@ -18,11 +18,14 @@ const XLAYER_TESTNET_CAIP2 = "eip155:1952";
 const XLAYER_MAINNET_CAIP2 = "eip155:196";
 const XLAYER_NETWORKS: readonly string[] = [XLAYER_TESTNET_CAIP2, XLAYER_MAINNET_CAIP2];
 
-/** USDC (or USDT) contract address on X Layer — deliberately NOT hardcoded. OKX's tokenlist
- *  (github.com/okx/xlayer-tokenlist) has the authoritative address; fail loud rather than guess
- *  a contract address that would silently misdirect a real payment. */
+/** OKX AI settles ASP payments in USDT or USDG (confirmed: okx.com/learn/okx-ai), not USDC — so
+ *  this is deliberately asset-agnostic, not hardcoded to one token. OKX's tokenlist
+ *  (github.com/okx/xlayer-tokenlist) has the authoritative address for whichever settlement asset
+ *  a given facilitator expects; fail loud rather than guess a contract address that would
+ *  silently misdirect a real payment. */
 function defaultAssetForNetwork(network: string): string {
-  const envVar = network === XLAYER_TESTNET_CAIP2 ? "XLAYER_USDC_TESTNET_ADDRESS" : "XLAYER_USDC_ADDRESS";
+  const envVar =
+    network === XLAYER_TESTNET_CAIP2 ? "XLAYER_SETTLEMENT_ASSET_TESTNET_ADDRESS" : "XLAYER_SETTLEMENT_ASSET_ADDRESS";
   const addr = process.env[envVar];
   if (!addr) {
     throw new Error(`[x402-xlayer] ${envVar} not set — see github.com/okx/xlayer-tokenlist for the real address`);
@@ -30,7 +33,7 @@ function defaultAssetForNetwork(network: string): string {
   return addr;
 }
 
-const DEFAULT_DECIMALS = Number(process.env.XLAYER_USDC_DECIMALS ?? 6); // standard USDC decimals
+const DEFAULT_DECIMALS = Number(process.env.XLAYER_SETTLEMENT_ASSET_DECIMALS ?? 6); // USDT/USDG both use 6
 
 /** Convert a human "$0.01"-style decimal string to a base-10 smallest-unit string. Honours an
  *  already-smallest-units string (no ".") unchanged, matching the IPaymentPlugin v1 D-6 rule. */

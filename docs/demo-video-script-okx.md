@@ -31,20 +31,20 @@ X post caption (under 280 chars, include the demo link + tag):
 ### COLD OPEN — the gap (0:00–0:10)
 
 - **ON SCREEN:** black → one line of text.
-- **VOICEOVER:** "OKX.AI lets agents pay each other and arbitrate disputes. But arbitration needs
-  a track record to arbitrate against. Before the job starts — how do you know?"
-- **CAPTION:** `OKX.AI has escrow + arbitration. It doesn't have reputation. KARMA does.`
+- **VOICEOVER:** "OKX.AI already tracks agent reputation. But that record lives on OKX, for work
+  done on OKX. What about everywhere else an agent has ever worked?"
+- **CAPTION:** `OKX.AI's reputation is real — and scoped to OKX.AI. KARMA reads across chains.`
 - **WOW BEAT:** the gap lands in one breath.
 
 ---
 
-### SCENE 1 — the ASP, live on the marketplace (0:10–0:20)
+### SCENE 1 — the ASP, live on the marketplace, free (0:10–0:20)
 
 - **ON SCREEN:** okx.ai marketplace listing for the KARMA Trust Oracle (once registered — see
-  Appendix C if not live yet at record time).
-- **VOICEOVER:** "This is KARMA's Trust Oracle — registered as an A2MCP Agent Service Provider,
-  priced per call in x402 on X Layer."
-- **CAPTION:** `A2MCP ASP · x402 on X Layer · get_cross_chain_trust_score`
+  Appendix B if not live yet at record time).
+- **VOICEOVER:** "This is KARMA's Trust Oracle — a free A2MCP Agent Service Provider on OKX.AI.
+  Zero setup, zero payment, one call."
+- **CAPTION:** `A2MCP ASP · free · get_cross_chain_trust_score`
 
 ---
 
@@ -78,8 +78,8 @@ X post caption (under 280 chars, include the demo link + tag):
 ### CLOSE (1:15–1:30)
 
 - **ON SCREEN:** one-line pitch + GitHub URL + `#OKXAI`.
-- **VOICEOVER:** "KARMA: the trust layer OKX.AI's agent economy is missing. Built on a protocol
-  that already runs on three other chains."
+- **VOICEOVER:** "KARMA: portable trust for OKX.AI's agent economy. Built on a protocol that
+  already runs on three other chains."
 - **CAPTION:** `github.com/Eilodon/KARMA-New · #OKXAI`
 
 ---
@@ -109,11 +109,12 @@ pnpm test            # Vitest — 907/912 passed, 5 skipped (incl. 23 new X Laye
 
 ## Appendix B — If the OKX.AI marketplace listing isn't approved yet at record time
 
-OKX's review can take up to 24h (okx.ai/tutorial/asp). If Scene 1's live listing isn't there yet:
-cut Scene 1 to the registration *prompt* instead (`Help me register an A2MCP ASP on OKX.AI using
-OKX Agent Identity from Onchain OS`) and caption it `submitted for review` — do not screenshot or
-fake an approved listing. Per the hackathon's own rule, an ASP that hasn't passed review yet is
-still findable by Agent ID, so show that ID on screen instead.
+Per the official rules, an unapproved listing makes the whole hackathon submission invalid — so
+if you're at this point, **don't record the final cut yet**. Register early enough (see
+`docs/OKX_HACKATHON_CHECKLIST.md` §3) that approval lands before you need to film. If you're
+recording a work-in-progress capture anyway, cut Scene 1 to the registration *prompt* instead
+(`Help me register an A2MCP ASP on OKX.AI using OKX Agent Identity from Onchain OS`) and caption
+it `submitted for review — not the final cut` — do not screenshot or fake an approved listing.
 
 ---
 
