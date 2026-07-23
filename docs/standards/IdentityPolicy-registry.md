@@ -95,5 +95,5 @@ would expand to `uint16` if `127` is filled, but no v2 is planned for now.
     `IDENTITY_POLICY_*` constants
   - TypeScript: [`src/plugins/karma.tool.ts`](../../src/plugins/karma.tool.ts)
     `create_job` identity-gate block
-- ADR: [`docs/superskills/adrs/2026-06-22-t3adk-terminal3-identity-gate.md`](../superskills/adrs/2026-06-22-t3adk-terminal3-identity-gate.md)
-- Design rationale (D1–D3): [`docs/superskills/plans/2026-06-23-d1-d5-tradeoff-study.md`](../superskills/plans/2026-06-23-d1-d5-tradeoff-study.md)
+- ADR: internal `t3adk-terminal3-identity-gate` decision record (2026-06-22)
+- Design rationale (D1–D3): internal `d1-d5-tradeoff-study` (2026-06-23)

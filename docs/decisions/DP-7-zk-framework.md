@@ -1,7 +1,7 @@
 # DP-7 — ZK framework: Circom + snarkjs (NOT Noir + Barretenberg)
 
-**Status:** Decided · 2026-06-24 · **Amended 2026-07-01** (see below)
-**Scope:** All ZK circuits in this repo (AgentCredentialProof T4, ReputationAggregationProof T1.1, JobCommitmentProof T1.2, cross-chain rep oracle T1.3).
+**Status:** Decided · 2026-06-24 · **Amended 2026-07-01** (see below) · **Amended 2026-07-21** (Casper scope note, see "When to revisit" item 4)
+**Scope:** All ZK circuits in this repo (AgentCredentialProof T4, ReputationAggregationProof T1.1, JobCommitmentProof T1.2, cross-chain rep oracle T1.3). This decision is about circuit/proving-system choice, not verifier placement — see item 4 below for why Casper isn't a verifier target today.
 **Reverses:** Roadmap §B.T1 framework recommendation.
 
 ## Amendment — 2026-07-01: the "BN254 native" claim below was wrong
@@ -97,6 +97,23 @@ Revisit Noir/Barretenberg if any of these become true:
    bottleneck.
 3. Audit feedback explicitly cites Circom's verbose syntax as a finding. Has
    not happened.
+4. **(Added 2026-07-21) Casper ships a native pairing-friendly-curve host function equivalent to
+   Soroban's CAP-0074.** Checked directly: `contracts-odra/Cargo.toml` has zero crypto crates
+   beyond what `odra`/`odra-modules` already pull in for EIP-712 (no `ark-*`, no `bn254`, no
+   pairing library of any kind), and nothing in Casper's own external-FFI surface (the
+   `casper_*` host functions enumerated in the whitepaper) exposes pairing or elliptic-curve
+   precompiles. This is a **deliberate scope gap, not an oversight**: cross-chain reputation on
+   Casper today is a *governed attestation* (`propose_set_cross_chain_rep`, gated by the same
+   multisig+timelock as every other governance parameter — see
+   `agent_skill_registry.rs:1166`'s own comment: *"Odra cannot verify Soroban Groth16 proofs
+   directly"*), not a verified ZK proof. A Casper-side Groth16 verifier is possible without a
+   native pairing host function — a pure-Rust/WASM implementation (e.g. `ark-groth16` compiled to
+   `wasm32-unknown-unknown`) — but this repo has never prototyped one, and the gas cost of
+   software pairing arithmetic inside a metered Casper contract is unmeasured and could plausibly
+   exceed the network's per-transaction gas ceiling (observed as tight even for ordinary contract
+   deploys — see `DEMO_CASPER.md`'s Step 1 gas notes). Revisit this item if either (a) Casper
+   ships a native pairing host function, or (b) a time-boxed spike measures the real gas cost of a
+   software Groth16 verifier on Casper and finds it practical.
 
 ## Decision check-list (what we'll actually do for T1.1)
 

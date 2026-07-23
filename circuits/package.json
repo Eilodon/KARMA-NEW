@@ -14,5 +14,12 @@
     "circomlib": "^2.0.5",
     "circomlibjs": "^0.1.7",
     "snarkjs": "^0.7.5"
+  },
+  "pnpm": {
+    "overrides": {
+      "ws@>=8.0.0 <8.21.0": ">=8.21.0",
+      "underscore@<=1.13.7": ">=1.13.8",
+      "brace-expansion@>=2.0.0 <2.1.2": ">=2.1.2"
+    }
   }
 }

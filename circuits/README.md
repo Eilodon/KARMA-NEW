@@ -39,7 +39,7 @@ make credential    # builds AgentCredentialProof + runs happy + 4 negative tests
 | `skillId`             | the skill being invoked                                                  |
 | `minReputation`       | the skill's on-chain reputation threshold                                |
 | `nullifier`           | `Poseidon(credentialSecret, skillId)` — per-skill replay guard            |
-| `credentialCommitment`| `Poseidon(credentialSecret)` — published when the credential is issued    |
+| `credentialCommitment`| `Poseidon(credentialSecret, reputationScore)` — published when the credential is issued; binds the score into the commitment so a secret-holder can't self-declare a different score (fixed post-audit, see `docs/decisions/DP-7-zk-framework.md`) |
 | `jobHistoryRoot`      | issuer-published merkle root the commitment is a leaf under              |
 
 | Private input         | Meaning                                                                  |

@@ -1,4 +1,8 @@
 #![no_std]
+// Soroban entry points take primitive args directly (no nested-struct params in the ABI), so
+// the `#[contractimpl]`-generated client wrapper around a wide constructor legitimately exceeds
+// clippy's default arg count.
+#![allow(clippy::too_many_arguments)]
 //! KARMA AgentCredentialProof verifier (Stellar ZK track, T5).
 //!
 //! Per synthesis §5.4 this contract is a ZK verification layer + minimal job ledger,

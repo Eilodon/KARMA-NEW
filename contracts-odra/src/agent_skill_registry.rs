@@ -43,6 +43,10 @@ pub const REP_SLASH_STEP: u32 = 10;
 pub const REP_FLOOR: u32 = 1;
 pub const MIN_DISPUTE_BOND_MOTES: u64 = 1_000_000_000; // 1 CSPR in motes (mirrors 0.001 ether)
 pub const RESPONSE_WINDOW: u64 = 3 * 24 * 60 * 60 * 1_000; // 3 days in ms
+// ── P4-A: Panel Arbitration (N-of-M) ──
+pub const PANEL_VOTE_WINDOW: u64 = 3 * 24 * 60 * 60 * 1_000; // 3 days in ms, mirrors RESPONSE_WINDOW
+pub const MIN_ARBITER_PANEL_SIZE: u32 = 3;
+pub const MAX_ARBITER_PANEL_SIZE: u32 = 9; // small + bounded, mirrors MAX_COMPOSITION_LEAVES's spirit
 
 // ─── Errors ────────────────────────────────────────────────────────────────
 #[odra::odra_error]
@@ -105,6 +109,20 @@ pub enum Error {
     NotArbiter = 51,
     ProviderNotResponded = 52,
     NotDisputed = 53,
+    // ── P2-A: AI decision rationale attestation ──
+    RationaleAlreadyAttested = 54,
+    InvalidRationaleHash = 55,
+    // ── P4-A: Panel Arbitration (N-of-M) ──
+    PanelSizeTooSmall = 56,
+    PanelSizeMustBeOdd = 57,
+    InvalidPanelThreshold = 58,
+    DuplicatePanelMember = 59,
+    PanelNotConfigured = 60,
+    NotPanelArbiter = 61,
+    AlreadyVotedOnPanel = 62,
+    WrongArbitrationMode = 63,
+    WrongPanelDisputeAmount = 64,
+    PanelVoteWindowOpen = 65,
 }
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -121,9 +139,22 @@ pub enum JobStatus {
 }
 
 #[odra::odra_type]
+#[derive(Copy)]
 pub enum Verdict {
     ProviderAtFault,
     RequesterAtFault,
+}
+
+#[odra::odra_type]
+pub enum ArbitrationMode {
+    Single,
+    Panel,
+}
+
+#[odra::odra_type]
+pub struct PanelVote {
+    pub arbiter: Address,
+    pub verdict: Verdict,
 }
 
 #[odra::odra_type]
@@ -175,6 +206,19 @@ pub enum ProposalAction {
         agent: Address,
         score: u32,
         source_chain: String,
+    },
+    SetArbiter {
+        new_arbiter: Address,
+    },
+    SetDisputeBondBps {
+        bps: u32,
+    },
+    SetArbiterPanel {
+        panel: Vec<Address>,
+        threshold: u32,
+    },
+    SetPanelArbiterFee {
+        fee: U512,
     },
 }
 
@@ -352,6 +396,18 @@ pub struct DisputeBondBpsUpdated {
     pub new_bps: u32,
 }
 
+// ── P2-A: AI decision rationale attestation ──────────────────────────────────
+/// Emitted when a requester commits a hash of their (typically LLM-generated) decision
+/// rationale for creating this job. `rationale_hash` is opaque on-chain — verifiers with the
+/// plaintext rationale re-hash it and compare, giving the decision an immutable, queryable
+/// on-chain anchor without KARMA having to store (or pay gas for) the plaintext itself.
+#[odra::event]
+pub struct RationaleAttested {
+    pub job_id: u64,
+    pub requester: Address,
+    pub rationale_hash: Bytes,
+}
+
 // ── Composition events (T2.1) ────────────────────────────────────────────────
 #[odra::event]
 pub struct CompositionRegistered {
@@ -380,6 +436,53 @@ pub struct Composition {
     pub weights_bps: Vec<u32>,
 }
 
+#[odra::event]
+pub struct ArbiterPanelUpdated {
+    pub old_panel: Vec<Address>,
+    pub new_panel: Vec<Address>,
+    pub threshold: u32,
+}
+
+#[odra::event]
+pub struct PanelArbiterFeeUpdated {
+    pub old_fee: U512,
+    pub new_fee: U512,
+}
+
+#[odra::event]
+pub struct PanelDisputePosted {
+    pub job_id: u64,
+    pub requester: Address,
+    pub panel_fee: U512,
+}
+
+#[odra::event]
+pub struct PanelVoteCast {
+    pub job_id: u64,
+    pub arbiter: Address,
+    pub verdict: Verdict,
+}
+
+#[odra::event]
+pub struct PanelArbitrated {
+    pub job_id: u64,
+    pub verdict: Verdict,
+    pub provider_at_fault_votes: u32,
+    pub requester_at_fault_votes: u32,
+}
+
+#[odra::event]
+pub struct PanelFeeDistributed {
+    pub job_id: u64,
+    pub arbiter: Address,
+    pub amount: U512,
+}
+
+#[odra::event]
+pub struct PanelDefaultResolved {
+    pub job_id: u64,
+}
+
 // ─── Contract ──────────────────────────────────────────────────────────────
 #[odra::module(events = [
     SkillRegistered, SkillDeactivated, JobCreated, ResultDelivered, JobCompleted,
@@ -388,6 +491,8 @@ pub struct Composition {
     ProposalCreated, ProposalApproved, ProposalExecuted, ProposalCancelled, GovernanceConfigured,
     DisputeBondPosted, DisputeResponsePosted, DisputeConceded, DisputeArbitrated,
     ArbiterUpdated, DisputeBondBpsUpdated,
+    ArbiterPanelUpdated, PanelArbiterFeeUpdated, PanelDisputePosted, PanelVoteCast,
+    PanelArbitrated, PanelFeeDistributed, PanelDefaultResolved,
 ])]
 pub struct AgentSkillRegistry {
     review_window: Var<u64>,
@@ -419,6 +524,22 @@ pub struct AgentSkillRegistry {
     proposal_counter: Var<u64>,
     proposals: Mapping<u64, GovernanceProposal>,
     proposal_approvals: Mapping<u64, Vec<Address>>,
+    // ── P2-A: AI decision rationale attestation ──────────────────────────────────
+    /// Purely additive vs. the `Job` struct already on-chain — keeps the upgrade backward-
+    /// compatible with every job written before this field existed.
+    rationale_hash: Mapping<u64, Bytes>,
+    // P4-A: Panel Arbitration (N-of-M). Governance-managed live fields (arbiter_panel,
+    // panel_threshold, panel_arbiter_fee); a dispute snapshots them at post-time into the
+    // job_panel_* mappings below so a later governance change never affects an in-flight
+    // dispute (audit-design HIGH finding #3 mitigation).
+    arbiter_panel: Var<Vec<Address>>,
+    panel_threshold: Var<u32>,
+    panel_arbiter_fee: Var<U512>,
+    dispute_arbitration_mode: Mapping<u64, ArbitrationMode>,
+    job_panel_snapshot: Mapping<u64, Vec<Address>>,
+    job_panel_threshold_snapshot: Mapping<u64, u32>,
+    panel_arbiter_fee_collected: Mapping<u64, U512>,
+    panel_votes: Mapping<u64, Vec<PanelVote>>,
 }
 
 #[odra::module]
@@ -432,7 +553,7 @@ impl AgentSkillRegistry {
         governance_threshold: u32,
         timelock_delay_ms: u64,
     ) {
-        if review_window_ms < MIN_REVIEW_WINDOW || review_window_ms > MAX_REVIEW_WINDOW {
+        if !(MIN_REVIEW_WINDOW..=MAX_REVIEW_WINDOW).contains(&review_window_ms) {
             self.env().revert(Error::BadReviewWindow);
         }
         if governance_signers.is_empty() || governance_signers.len() as u32 > MAX_GOVERNANCE_SIGNERS {
@@ -765,6 +886,68 @@ impl AgentSkillRegistry {
         self.env().emit_event(ResultDisputed { job_id, requester: caller, amount });
     }
 
+/// P4-A: Like `dispute_result`, but flags the job for panel arbitration and collects an
+/// additional flat participation fee (governance-set) on top of the standard dispute bond.
+/// Snapshots the panel + threshold + fee onto the job's own storage at this moment — a
+/// later `propose_set_arbiter_panel`/`propose_set_panel_arbiter_fee` execution must never
+/// change the terms an already-posted dispute is running under (audit-design HIGH #3).
+#[odra(payable)]
+pub fn dispute_result_via_panel(&mut self, job_id: u64) {
+    let mut j = self.require_job(job_id);
+    let caller = self.env().caller();
+    if j.requester != caller {
+        self.env().revert(Error::NotRequester);
+    }
+    if j.status != JobStatus::Delivered {
+        self.env().revert(Error::JobNotDelivered);
+    }
+    if self.env().get_block_time() > j.deadline {
+        self.env().revert(Error::ReviewWindowClosed);
+    }
+    let panel = self.arbiter_panel.get_or_default();
+    if panel.is_empty() {
+        self.env().revert(Error::PanelNotConfigured);
+    }
+
+    let bps = self.dispute_bond_bps.get_or_default();
+    let mut required_bond = (U512::from(bps) * j.escrow_amount) / U512::from(10_000u32);
+    let min_bond = U512::from(MIN_DISPUTE_BOND_MOTES);
+    if required_bond < min_bond {
+        required_bond = min_bond;
+    }
+    let fee = self.panel_arbiter_fee.get_or_default();
+    let required_total = required_bond + fee;
+    let attached = self.env().attached_value();
+    if attached != required_total {
+        self.env().revert(Error::WrongPanelDisputeAmount);
+    }
+
+    let threshold = self.panel_threshold.get_or_default();
+    self.job_panel_snapshot.set(&job_id, panel);
+    self.job_panel_threshold_snapshot.set(&job_id, threshold);
+    self.panel_arbiter_fee_collected.set(&job_id, fee);
+    self.dispute_arbitration_mode.set(&job_id, ArbitrationMode::Panel);
+
+    j.status = JobStatus::Disputed;
+    let dispute_info = DisputeInfo {
+        dispute_bond: required_bond,
+        provider_bond: U512::zero(),
+        disputed_at: self.env().get_block_time(),
+    };
+    self.disputes.set(&job_id, dispute_info);
+
+    if !j.evaluator_fee.is_zero() {
+        let credit = self.pending_withdrawals.get(&caller).unwrap_or_default() + j.evaluator_fee;
+        self.pending_withdrawals.set(&caller, credit);
+    }
+
+    let amount = j.escrow_amount;
+    self.jobs.set(&job_id, j);
+    self.env().emit_event(DisputeBondPosted { job_id, requester: caller, bond: required_bond });
+    self.env().emit_event(PanelDisputePosted { job_id, requester: caller, panel_fee: fee });
+    self.env().emit_event(ResultDisputed { job_id, requester: caller, amount });
+}
+
     /// P1-A: Provider matches the dispute bond to contest (enter arbitration).
     #[odra(payable)]
     pub fn respond_to_dispute(&mut self, job_id: u64) {
@@ -861,15 +1044,53 @@ impl AgentSkillRegistry {
         self.env().emit_event(JobRefunded { job_id, requester, amount: escrow });
     }
 
+/// P4-A: Anyone may call once `PANEL_VOTE_WINDOW` elapses without the panel reaching
+/// majority. Defaults `ProviderAtFault` — the same direction `resolve_default_concede`
+/// already defaults to when a provider goes silent — because under-participation is treated
+/// as the panel-operator side's risk, not the requester's. Requires the provider to have
+/// already responded (bonded); an unresponsive PROVIDER is still `resolve_default_concede`'s
+/// job, unchanged (that function explicitly reverts `AlreadyResponded` once `provider_bond`
+/// is set, so the two functions' preconditions are mutually exclusive by construction).
+pub fn resolve_panel_default(&mut self, job_id: u64) {
+    let j = self.require_job(job_id);
+    if j.status != JobStatus::Disputed {
+        self.env().revert(Error::NotDisputed);
+    }
+    if self.dispute_arbitration_mode.get(&job_id) != Some(ArbitrationMode::Panel) {
+        self.env().revert(Error::WrongArbitrationMode);
+    }
+    let d = self.disputes.get(&job_id)
+        .unwrap_or_else(|| self.env().revert(Error::NotBondedDispute));
+    if d.provider_bond.is_zero() {
+        self.env().revert(Error::ProviderNotResponded);
+    }
+    if self.env().get_block_time() <= d.disputed_at + PANEL_VOTE_WINDOW {
+        self.env().revert(Error::PanelVoteWindowOpen);
+    }
+
+    self.settle_dispute_verdict(job_id, j, d.dispute_bond, d.provider_bond, Verdict::ProviderAtFault);
+    self.env().emit_event(PanelDefaultResolved { job_id });
+
+    let votes = self.panel_votes.get(&job_id).unwrap_or_default();
+    self.distribute_panel_fee(job_id, &votes);
+}
+
     /// P1-A: Arbiter adjudicates a contested dispute (both sides bonded). Loser-pays.
     pub fn arbitrate(&mut self, job_id: u64, verdict: Verdict) {
         let caller = self.env().caller();
         if caller != self.arbiter.get().unwrap() {
             self.env().revert(Error::NotArbiter);
         }
-        let mut j = self.require_job(job_id);
+        let j = self.require_job(job_id);
         if j.status != JobStatus::Disputed {
             self.env().revert(Error::NotDisputed);
+        }
+        // P4-A: a job specifically routed through panel arbitration must only ever be settled
+        // by cast_panel_vote reaching its own threshold — never by the single arbiter directly,
+        // or panel mode provides no guarantee beyond the single-arbiter path it exists to
+        // supplement. Pre-existing (Single-mode) jobs have no entry here, so this is additive.
+        if self.dispute_arbitration_mode.get(&job_id) == Some(ArbitrationMode::Panel) {
+            self.env().revert(Error::WrongArbitrationMode);
         }
         let d = self.disputes.get(&job_id)
             .unwrap_or_else(|| self.env().revert(Error::NotBondedDispute));
@@ -880,11 +1101,27 @@ impl AgentSkillRegistry {
             self.env().revert(Error::ProviderNotResponded);
         }
 
+        self.settle_dispute_verdict(job_id, j, d.dispute_bond, d.provider_bond, verdict);
+        self.env().emit_event(DisputeArbitrated { job_id, verdict, arbiter: caller });
+    }
+
+    /// Shared by `arbitrate` (single-arbiter) and `cast_panel_vote` (panel, once threshold is
+    /// reached) — exactly one audited fund-movement/reputation code path for a dispute verdict,
+    /// per audit-design goal G6 (plan Task 2). Extracted verbatim from `arbitrate`'s original
+    /// body — no logic changed, only relocated.
+    fn settle_dispute_verdict(
+        &mut self,
+        job_id: u64,
+        mut j: Job,
+        dispute_bond: U512,
+        provider_bond: U512,
+        verdict: Verdict,
+    ) {
         match verdict {
             Verdict::ProviderAtFault => {
                 j.status = JobStatus::Refunded;
                 let credit = self.pending_withdrawals.get(&j.requester).unwrap_or_default()
-                    + j.escrow_amount + d.dispute_bond + d.provider_bond;
+                    + j.escrow_amount + dispute_bond + provider_bond;
                 self.pending_withdrawals.set(&j.requester, credit);
                 self.slash_agent_rep(j.provider);
                 self.slash_skill_rep(j.skill_id);
@@ -896,7 +1133,7 @@ impl AgentSkillRegistry {
             Verdict::RequesterAtFault => {
                 j.status = JobStatus::Completed;
                 j.completed_at = self.env().get_block_time();
-                let provider_total = j.escrow_amount + d.provider_bond + d.dispute_bond;
+                let provider_total = j.escrow_amount + provider_bond + dispute_bond;
                 let credit = self.pending_withdrawals.get(&j.provider).unwrap_or_default() + provider_total;
                 self.pending_withdrawals.set(&j.provider, credit);
                 let mut s = self.require_skill(j.skill_id);
@@ -918,24 +1155,238 @@ impl AgentSkillRegistry {
                 });
             }
         }
-        self.env().emit_event(DisputeArbitrated { job_id, verdict, arbiter: caller });
     }
 
-    /// P1-A: Governance sets the dispute bond percentage. 10_000 = 1× escrow (default).
-    pub fn set_dispute_bond_bps(&mut self, bps: u32) {
-        self.require_governance_signer();
-        let old = self.dispute_bond_bps.get_or_default();
-        self.dispute_bond_bps.set(bps);
-        self.env().emit_event(DisputeBondBpsUpdated { old_bps: old, new_bps: bps });
+/// P4-A: One vote from one panel member. `respond_to_dispute` (provider matching the bond)
+/// is unchanged and still required before a panel dispute can settle — a panel doesn't let
+/// a provider skip responding. Reads panel membership + threshold from the job's OWN
+/// snapshot (`job_panel_snapshot`), never the live `arbiter_panel`, so a governance change
+/// mid-dispute cannot affect this job (audit-design HIGH #3).
+pub fn cast_panel_vote(&mut self, job_id: u64, verdict: Verdict) {
+    let caller = self.env().caller();
+    let j = self.require_job(job_id);
+    if j.status != JobStatus::Disputed {
+        self.env().revert(Error::NotDisputed);
+    }
+    if self.dispute_arbitration_mode.get(&job_id) != Some(ArbitrationMode::Panel) {
+        self.env().revert(Error::WrongArbitrationMode);
+    }
+    let panel = self.job_panel_snapshot.get(&job_id).unwrap_or_default();
+    if !panel.contains(&caller) {
+        self.env().revert(Error::NotPanelArbiter);
+    }
+    let d = self.disputes.get(&job_id)
+        .unwrap_or_else(|| self.env().revert(Error::NotBondedDispute));
+    if d.provider_bond.is_zero() {
+        self.env().revert(Error::ProviderNotResponded);
     }
 
-    /// P1-A: Governance sets the arbiter address for dispute resolution.
-    pub fn set_arbiter(&mut self, new_arbiter: Address) {
-        self.require_governance_signer();
-        let old = self.arbiter.get().unwrap();
-        self.arbiter.set(new_arbiter);
-        self.env().emit_event(ArbiterUpdated { old_arbiter: old, new_arbiter });
+    let mut votes = self.panel_votes.get(&job_id).unwrap_or_default();
+    if votes.iter().any(|v| v.arbiter == caller) {
+        self.env().revert(Error::AlreadyVotedOnPanel);
     }
+    votes.push(PanelVote { arbiter: caller, verdict });
+    self.panel_votes.set(&job_id, votes.clone());
+    self.env().emit_event(PanelVoteCast { job_id, arbiter: caller, verdict });
+
+    let provider_at_fault_votes = votes.iter()
+        .filter(|v| v.verdict == Verdict::ProviderAtFault).count() as u32;
+    let requester_at_fault_votes = votes.iter()
+        .filter(|v| v.verdict == Verdict::RequesterAtFault).count() as u32;
+    let threshold = self.job_panel_threshold_snapshot.get(&job_id).unwrap_or_default();
+
+    let winning_verdict = if provider_at_fault_votes >= threshold {
+        Some(Verdict::ProviderAtFault)
+    } else if requester_at_fault_votes >= threshold {
+        Some(Verdict::RequesterAtFault)
+    } else {
+        None
+    };
+
+    if let Some(final_verdict) = winning_verdict {
+        self.settle_dispute_verdict(job_id, j, d.dispute_bond, d.provider_bond, final_verdict);
+        self.env().emit_event(PanelArbitrated {
+            job_id,
+            verdict: final_verdict,
+            provider_at_fault_votes,
+            requester_at_fault_votes,
+        });
+        self.distribute_panel_fee(job_id, &votes);
+    }
+}
+
+/// P4-A: Flat fee, split evenly across every arbiter who voted (regardless of which side),
+/// pull-payment via `pending_withdrawals` — never a push-transfer, per audit-design HIGH #1
+/// (independently confirmed safe/required by specialist-review of the Task 1+2 groundwork).
+/// Last voter absorbs the rounding remainder, mirroring `settle_completion`'s composite-payout
+/// pattern exactly (audit-design MEDIUM finding).
+fn distribute_panel_fee(&mut self, job_id: u64, votes: &[PanelVote]) {
+    let fee = self.panel_arbiter_fee_collected.get(&job_id).unwrap_or_default();
+    if fee.is_zero() || votes.is_empty() {
+        return;
+    }
+    let n = votes.len();
+    let mut distributed = U512::zero();
+    for (i, v) in votes.iter().enumerate() {
+        let share = if i + 1 == n {
+            fee - distributed
+        } else {
+            let s = fee / U512::from(n as u64);
+            distributed += s;
+            s
+        };
+        let credit = self.pending_withdrawals.get(&v.arbiter).unwrap_or_default() + share;
+        self.pending_withdrawals.set(&v.arbiter, credit);
+        self.env().emit_event(PanelFeeDistributed { job_id, arbiter: v.arbiter, amount: share });
+    }
+}
+
+    /// P1-A/P0-B: Propose a dispute bond percentage change. 10_000 = 1× escrow (default).
+    /// Governance-signer only; takes effect via the same multisig+timelock proposal lifecycle
+    /// as `propose_set_cross_chain_rep` — no single-signer immediate-effect path.
+    pub fn propose_set_dispute_bond_bps(&mut self, bps: u32) -> u64 {
+        self.require_governance_signer();
+        let caller = self.env().caller();
+        let proposal_id = self.proposal_counter.get_or_default() + 1;
+        self.proposal_counter.set(proposal_id);
+
+        let proposal = GovernanceProposal {
+            action: ProposalAction::SetDisputeBondBps { bps },
+            proposer: caller,
+            proposed_at: self.env().get_block_time(),
+            executed: false,
+            cancelled: false,
+        };
+        self.proposals.set(&proposal_id, proposal);
+        self.proposal_approvals.set(&proposal_id, vec![caller]);
+
+        self.env().emit_event(ProposalCreated { proposal_id, proposer: caller });
+        self.env().emit_event(ProposalApproved {
+            proposal_id,
+            signer: caller,
+            approval_count: 1,
+            threshold: self.governance_threshold.get_or_default(),
+        });
+        proposal_id
+    }
+
+    /// P1-A/P0-B: Propose an arbiter change. Governance-signer only; same proposal lifecycle
+    /// as `propose_set_cross_chain_rep` — no single-signer immediate-effect path.
+    pub fn propose_set_arbiter(&mut self, new_arbiter: Address) -> u64 {
+        self.require_governance_signer();
+        let caller = self.env().caller();
+        let proposal_id = self.proposal_counter.get_or_default() + 1;
+        self.proposal_counter.set(proposal_id);
+
+        let proposal = GovernanceProposal {
+            action: ProposalAction::SetArbiter { new_arbiter },
+            proposer: caller,
+            proposed_at: self.env().get_block_time(),
+            executed: false,
+            cancelled: false,
+        };
+        self.proposals.set(&proposal_id, proposal);
+        self.proposal_approvals.set(&proposal_id, vec![caller]);
+
+        self.env().emit_event(ProposalCreated { proposal_id, proposer: caller });
+        self.env().emit_event(ProposalApproved {
+            proposal_id,
+            signer: caller,
+            approval_count: 1,
+            threshold: self.governance_threshold.get_or_default(),
+        });
+        proposal_id
+    }
+
+/// P4-A: Propose a new N-of-M arbiter panel. Governance-signer only, same proposal
+/// lifecycle as `propose_set_arbiter`. Validates panel shape at propose time so a bad
+/// configuration never even reaches the approval queue.
+pub fn propose_set_arbiter_panel(&mut self, panel: Vec<Address>, threshold: u32) -> u64 {
+    self.require_governance_signer();
+    self.validate_panel_shape(&panel, threshold);
+
+    let caller = self.env().caller();
+    let proposal_id = self.proposal_counter.get_or_default() + 1;
+    self.proposal_counter.set(proposal_id);
+
+    let proposal = GovernanceProposal {
+        action: ProposalAction::SetArbiterPanel { panel, threshold },
+        proposer: caller,
+        proposed_at: self.env().get_block_time(),
+        executed: false,
+        cancelled: false,
+    };
+    self.proposals.set(&proposal_id, proposal);
+    self.proposal_approvals.set(&proposal_id, vec![caller]);
+
+    self.env().emit_event(ProposalCreated { proposal_id, proposer: caller });
+    self.env().emit_event(ProposalApproved {
+        proposal_id,
+        signer: caller,
+        approval_count: 1,
+        threshold: self.governance_threshold.get_or_default(),
+    });
+    proposal_id
+}
+
+/// P4-A: Propose a new flat panel-arbiter participation fee. Same governed lifecycle.
+pub fn propose_set_panel_arbiter_fee(&mut self, fee: U512) -> u64 {
+    self.require_governance_signer();
+    let caller = self.env().caller();
+    let proposal_id = self.proposal_counter.get_or_default() + 1;
+    self.proposal_counter.set(proposal_id);
+
+    let proposal = GovernanceProposal {
+        action: ProposalAction::SetPanelArbiterFee { fee },
+        proposer: caller,
+        proposed_at: self.env().get_block_time(),
+        executed: false,
+        cancelled: false,
+    };
+    self.proposals.set(&proposal_id, proposal);
+    self.proposal_approvals.set(&proposal_id, vec![caller]);
+
+    self.env().emit_event(ProposalCreated { proposal_id, proposer: caller });
+    self.env().emit_event(ProposalApproved {
+        proposal_id,
+        signer: caller,
+        approval_count: 1,
+        threshold: self.governance_threshold.get_or_default(),
+    });
+    proposal_id
+}
+
+/// Shared by `propose_set_arbiter_panel` and `execute_proposal`'s `SetArbiterPanel` arm
+/// (defense-in-depth per specialist-review: validated at propose time AND re-checked at
+/// execute time, so no future code path that could construct a `SetArbiterPanel` action
+/// without going through the validated constructor could ever store a broken panel).
+fn validate_panel_shape(&self, panel: &[Address], threshold: u32) {
+    let len = panel.len() as u32;
+    if !(MIN_ARBITER_PANEL_SIZE..=MAX_ARBITER_PANEL_SIZE).contains(&len) {
+        self.env().revert(Error::PanelSizeTooSmall);
+    }
+    if len.is_multiple_of(2) {
+        self.env().revert(Error::PanelSizeMustBeOdd);
+    }
+    if threshold != len / 2 + 1 {
+        self.env().revert(Error::InvalidPanelThreshold);
+    }
+    for i in 0..panel.len() {
+        for j in (i + 1)..panel.len() {
+            if panel[i] == panel[j] {
+                self.env().revert(Error::DuplicatePanelMember);
+            }
+        }
+    }
+}
+
+pub fn get_arbiter_panel(&self) -> Vec<Address> {
+    self.arbiter_panel.get_or_default()
+}
+
+pub fn get_panel_threshold(&self) -> u32 {
+    self.panel_threshold.get_or_default()
+}
 
     /// Evaluator approves or rejects a delivered result (P0-A). Only callable by the job's
     /// designated evaluator within the review window. The evaluator fee is released regardless.
@@ -1206,6 +1657,35 @@ impl AgentSkillRegistry {
                     source_chain: source_chain.clone(),
                 });
             }
+            ProposalAction::SetArbiter { new_arbiter } => {
+                let old_arbiter = self.arbiter.get().unwrap();
+                self.arbiter.set(*new_arbiter);
+                self.env().emit_event(ArbiterUpdated { old_arbiter, new_arbiter: *new_arbiter });
+            }
+            ProposalAction::SetDisputeBondBps { bps } => {
+                let old_bps = self.dispute_bond_bps.get_or_default();
+                self.dispute_bond_bps.set(*bps);
+                self.env().emit_event(DisputeBondBpsUpdated { old_bps, new_bps: *bps });
+            }
+            ProposalAction::SetArbiterPanel { panel, threshold } => {
+                // Defense-in-depth (specialist-review, plan Task 3): re-validate at execute
+                // time too, not just at propose time, so no future code path that could
+                // construct this action differently could ever store a broken panel.
+                self.validate_panel_shape(panel, *threshold);
+                let old_panel = self.arbiter_panel.get_or_default();
+                self.arbiter_panel.set(panel.clone());
+                self.panel_threshold.set(*threshold);
+                self.env().emit_event(ArbiterPanelUpdated {
+                    old_panel,
+                    new_panel: panel.clone(),
+                    threshold: *threshold,
+                });
+            }
+            ProposalAction::SetPanelArbiterFee { fee } => {
+                let old_fee = self.panel_arbiter_fee.get_or_default();
+                self.panel_arbiter_fee.set(*fee);
+                self.env().emit_event(PanelArbiterFeeUpdated { old_fee, new_fee: *fee });
+            }
         }
 
         let executor = self.env().caller();
@@ -1321,6 +1801,35 @@ impl AgentSkillRegistry {
 
     pub fn get_arbiter(&self) -> Address {
         self.arbiter.get().unwrap()
+    }
+
+    // ── P2-A: AI decision rationale attestation ──────────────────────────────────
+    /// Commits a hash of the requester's (typically LLM-generated) decision rationale for
+    /// `job_id`, once. Requester-only (it is their own agent's stated reason for buying this
+    /// skill) and set-once (an attestation that could be silently rewritten after the fact
+    /// would be worthless as an anchor). Callable any time after the job exists — including
+    /// after settlement — since it records WHY a decision was made, not a claim about the
+    /// job's outcome, and doesn't participate in escrow/dispute settlement logic at all.
+    pub fn attest_rationale(&mut self, job_id: u64, rationale_hash: Bytes) {
+        let j = self.require_job(job_id);
+        let caller = self.env().caller();
+        if j.requester != caller {
+            self.env().revert(Error::NotRequester);
+        }
+        if rationale_hash.len() != 32 {
+            self.env().revert(Error::InvalidRationaleHash);
+        }
+        if self.rationale_hash.get(&job_id).is_some() {
+            self.env().revert(Error::RationaleAlreadyAttested);
+        }
+        self.rationale_hash.set(&job_id, rationale_hash.clone());
+        self.env().emit_event(RationaleAttested { job_id, requester: caller, rationale_hash });
+    }
+
+    /// `None` when the requester never attested a rationale for this job (attestation is
+    /// optional — most jobs, e.g. ones a human created directly, will have none).
+    pub fn get_rationale_hash(&self, job_id: u64) -> Option<Bytes> {
+        self.rationale_hash.get(&job_id)
     }
 }
 
@@ -1549,3 +2058,6 @@ impl AgentSkillRegistry {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod proptests;

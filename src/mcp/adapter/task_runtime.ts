@@ -4,6 +4,22 @@ import type { TaskHandleRecord, TaskStatus } from "../../core/task_store.js";
 
 export const MCP_TASKS_EXTENSION = "io.modelcontextprotocol/tasks";
 
+/**
+ * SDK v2 beta.2's 2026-07-28 dispatch gate hard-rejects "Method not found"
+ * for ANY request whose method name is recognized by EITHER protocol era's
+ * spec-method registry but absent from the negotiated era's own registry --
+ * before handler lookup ever runs (confirmed by reading the shipped runtime:
+ * `isSpecRequestMethod` unions the 2025 AND 2026 registries, and "tasks/get"
+ * / "tasks/cancel" are still literal keys in the deprecated 2025-11-25
+ * registry even though the 2026 registry dropped them). No handler
+ * registration technique -- public or private -- can route around this gate,
+ * so KARMA's own Tasks methods live under a karma-owned namespace that can
+ * never collide with a current or future spec method name.
+ */
+export const MCP_TASKS_GET_METHOD = "io.karma/tasks/get";
+export const MCP_TASKS_UPDATE_METHOD = "io.karma/tasks/update";
+export const MCP_TASKS_CANCEL_METHOD = "io.karma/tasks/cancel";
+
 export interface NativeTaskDescriptor {
   taskId: string;
   status: TaskStatus;
@@ -210,10 +226,23 @@ function defaultInputRequests(record: TaskHandleRecord): TaskInputRequests | und
   return record.inputRequests;
 }
 
-export function toCreateTaskResult(record: TaskHandleRecord): CreateTaskResult {
+/**
+ * SDK v2 beta.2 unconditionally validates every tools/call handler's return
+ * value as CallToolResult | InputRequiredResult (Server#_wrapHandler calls
+ * codec.validateResult for "tools/call" regardless of the tool's declared
+ * execution.taskSupport -- confirmed empirically by reading the shipped
+ * runtime: taskSupport has zero effect on result validation, it is a
+ * tools/list-only advertisement). CallToolResultSchema requires `content`
+ * and is built with `z.looseObject`, so KARMA's own resultType:"task" +
+ * descriptor fields survive as extra wire-preserved keys once `content`
+ * satisfies the SDK's one hard requirement.
+ */
+export function toCreateTaskResult(record: TaskHandleRecord): CreateTaskResult & { content: Array<{ type: "text"; text: string }> } {
+  const descriptor = toTaskDescriptor(record);
   return {
+    content: [{ type: "text", text: `Task ${descriptor.taskId} created (status: ${descriptor.status})` }],
     resultType: "task",
-    ...toTaskDescriptor(record),
+    ...descriptor,
   };
 }
 

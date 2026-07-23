@@ -39,8 +39,8 @@ describe("registerConfiguredPaymentPlugins (T7/T11 boot wiring)", () => {
       registry,
     });
     expect(report.registered).toEqual(["x402-casper"]);
-    expect(registry.resolve("x402", "casper:testnet")?.id).toBe("x402-casper");
-    expect(registry.resolve("x402", "casper:mainnet")?.id).toBe("x402-casper");
+    expect(registry.resolve("x402", "casper:casper-test")?.id).toBe("x402-casper");
+    expect(registry.resolve("x402", "casper:casper")?.id).toBe("x402-casper");
   });
 
   it("registers BOTH plugins when both URLs are set", () => {

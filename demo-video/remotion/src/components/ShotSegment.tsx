@@ -56,7 +56,7 @@ export const ShotSegment: React.FC<{ seg: Segment; explorer: string }> = ({ seg,
               fontSize: 18,
             }}
           >
-            {explorer.replace(/^https?:\/\//, "")}/tx/0x…155dac
+            {explorer.replace(/^https?:\/\//, "")}
           </span>
         </div>
         {seg.shot ? (

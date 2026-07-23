@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   requireTestnetEnv,
+  requireCasperTestnetEnv,
   RunnerConfigError,
   buildDryRunAdapter,
 } from "../lib/autonomous_loop/runner.js";
@@ -47,6 +48,32 @@ describe("runner — requireTestnetEnv (DP-3 testnet-only gate)", () => {
     expect(
       requireTestnetEnv({ STELLAR_NETWORK: "stellar:testnet", STELLAR_X402_FACILITATOR_URL: "https://f" }),
     ).toEqual({ network: "stellar:testnet", facilitatorUrl: "https://f" });
+  });
+});
+
+describe("runner — requireCasperTestnetEnv (DP-3 testnet-only gate, Casper side)", () => {
+  it("throws RunnerConfigError listing the missing vars", () => {
+    expect(() => requireCasperTestnetEnv({})).toThrow(RunnerConfigError);
+    expect(() => requireCasperTestnetEnv({})).toThrow(/CASPER_RPC_URL/);
+    expect(() => requireCasperTestnetEnv({})).toThrow(/KARMA_ODRA_REGISTRY/);
+  });
+
+  it("rejects a non-testnet RPC URL — the autonomous loop is testnet-only", () => {
+    expect(() =>
+      requireCasperTestnetEnv({
+        CASPER_RPC_URL: "https://node.mainnet.cspr.cloud",
+        KARMA_ODRA_REGISTRY: "hash-abc",
+      }),
+    ).toThrow(/testnet-only/);
+  });
+
+  it("returns the config for a valid testnet env", () => {
+    expect(
+      requireCasperTestnetEnv({
+        CASPER_RPC_URL: "https://node.testnet.cspr.cloud",
+        KARMA_ODRA_REGISTRY: "hash-abc",
+      }),
+    ).toEqual({ rpcUrl: "https://node.testnet.cspr.cloud", contractHash: "hash-abc" });
   });
 });
 

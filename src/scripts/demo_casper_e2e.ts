@@ -119,7 +119,7 @@ async function main(): Promise<void> {
     `x402 payer           = ${short(receipt.payer)}`,
     `x402 payee           = ${short(receipt.payee)}`,
     `x402 amount          = ${receipt.amount} motes`,
-    `x402 signature (hex) = ${short(receipt.txHash ?? "")}`,
+    `x402 signature (hex) = ${short(receipt.signature ?? "")}`,
   ]);
 
   // ── Step 5 — provider fetches RWA price, signs it with the Casper key ──

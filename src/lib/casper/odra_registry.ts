@@ -1,14 +1,15 @@
 /**
  * Casper/Odra `AgentSkillRegistry` client (T2.1, P0.4).
  *
- * Two implementations behind a common `IAgentSkillRegistry` interface:
- *   • `InProcessRegistry` — faithful JS twin of `contracts-odra/src/agent_skill_registry.rs`
- *     (same composition primitive, validation order, weighted escrow split). Used when no live
- *     Casper RPC is available (demos, tests, MCP tool surface via `composition_tools.ts`).
- *   • `RpcRegistry` — thin RPC client against a deployed Odra contract. Activated when
- *     `CASPER_RPC_URL` + `CASPER_CONTRACT_HASH` env vars are set.
+ * `InProcessRegistry` — faithful JS twin of `contracts-odra/src/agent_skill_registry.rs` (same
+ * composition primitive, validation order, weighted escrow split). Used when no live Casper RPC
+ * is needed (demos, tests, MCP tool surface via `composition_tools.ts`).
  *
- * Factory: `createRegistry()` picks the right implementation based on env.
+ * The real live-chain path is `CasperLiveClient` (`src/lib/casper/live_client.ts`), which builds,
+ * signs, and submits real `casper-js-sdk` transactions against the deployed contract — this file
+ * previously also declared a stub `RpcRegistry`/`createRegistry()` pair for the same purpose, but
+ * `CasperLiveClient` superseded it before that path was ever wired to anything; removed
+ * 2026-07-21 rather than left as an unimplemented-looking stub.
  */
 
 export const MAX_COMPOSITION_LEAVES = 8;
@@ -340,61 +341,6 @@ export class InProcessRegistry implements IAgentSkillRegistry {
   }
 }
 
-/**
- * RPC-backed registry client (P0.4). Delegates to a deployed Odra contract via Casper JSON-RPC.
- * Activated when `CASPER_RPC_URL` + `CASPER_CONTRACT_HASH` are set.
- *
- * Stub: method signatures match `IAgentSkillRegistry` but throw until casper-js-sdk wiring
- * lands (requires the contract to be deployed on testnet first).
- */
-export class RpcRegistry implements IAgentSkillRegistry {
-  constructor(
-    readonly rpcUrl: string,
-    readonly contractHash: string,
-  ) {}
-
-  private notImplemented(): never {
-    throw new Error(
-      `RpcRegistry: casper-js-sdk wiring not yet implemented. ` +
-      `Using CASPER_RPC_URL=${this.rpcUrl} contract=${this.contractHash}. ` +
-      `Unset CASPER_RPC_URL to fall back to InProcessRegistry.`,
-    );
-  }
-
-  async register_skill(_owner: string, _s: NewSkill): Promise<number> { this.notImplemented(); }
-  async deactivate_skill(_skillId: number, _caller: string): Promise<void> { this.notImplemented(); }
-  async register_composition(_wrapperOwner: string, _wrapper: NewSkill, _leafSkillIds: number[], _weightsBps: number[]): Promise<number> { this.notImplemented(); }
-  async is_composite(_skillId: number): Promise<boolean> { this.notImplemented(); }
-  async get_composition(_skillId: number): Promise<Composition | null> { this.notImplemented(); }
-  async list_composites(): Promise<Array<{ skillId: number; composition: Composition }>> { this.notImplemented(); }
-  async get_skill(_skillId: number): Promise<SkillRow> { this.notImplemented(); }
-  async create_job(_skillId: number, _requester: string, _taskHash: string, _escrow: bigint): Promise<number> { this.notImplemented(); }
-  async deliver_result(_jobId: number, _provider: string, _resultHash: string): Promise<void> { this.notImplemented(); }
-  async confirm_completion(_jobId: number, _requester: string): Promise<void> { this.notImplemented(); }
-  async dispute_result(_jobId: number, _requester: string): Promise<void> { this.notImplemented(); }
-  async pending_withdrawals_of(_agent: string): Promise<bigint> { this.notImplemented(); }
-  async agent_reputation(_agent: string): Promise<number> { this.notImplemented(); }
-  async withdraw(_agent: string): Promise<bigint> { this.notImplemented(); }
-  async deposit_bond(_agent: string, _amount: bigint): Promise<void> { this.notImplemented(); }
-  async bonded_of(_agent: string): Promise<bigint> { this.notImplemented(); }
-  async cross_chain_rep(_agent: string): Promise<number> { this.notImplemented(); }
-  async set_cross_chain_rep(_agent: string, _score: number, _sourceChain: string): Promise<void> { this.notImplemented(); }
-}
-
 /** Backward-compatible alias — both as value (constructor) and type. */
 export const OdraRegistry = InProcessRegistry;
 export type OdraRegistry = InProcessRegistry;
-
-/**
- * Factory: picks InProcessRegistry or RpcRegistry based on env.
- * - `CASPER_RPC_URL` + `CASPER_CONTRACT_HASH` set → RpcRegistry
- * - Otherwise → InProcessRegistry (current default, network-free)
- */
-export function createRegistry(env: Record<string, string | undefined> = process.env): IAgentSkillRegistry {
-  const rpcUrl = env.CASPER_RPC_URL;
-  const contractHash = env.CASPER_CONTRACT_HASH;
-  if (rpcUrl && contractHash) {
-    return new RpcRegistry(rpcUrl, contractHash);
-  }
-  return new InProcessRegistry();
-}

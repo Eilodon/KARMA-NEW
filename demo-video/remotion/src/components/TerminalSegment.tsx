@@ -30,6 +30,9 @@ const titleFor = (id: string): string => {
     flagship: "karma ~ t3_demo_capture  ·  Terminal3 testnet",
     economy: "karma ~ pnpm demo  ·  Pharos Atlantic",
     depth: "karma ~ pnpm demo:discover",
+    lifecycle: "karma ~ demo_casper_full_job_lifecycle.ts",
+    courtroom: "karma ~ demo_casper_courtroom.ts",
+    governance: "karma ~ demo_casper_cross_chain_rep_governance.ts",
   };
   return map[id] ?? `agent ~ ${id}`;
 };
@@ -54,10 +57,11 @@ const PlaceholderTerminal: React.FC<{ id: string }> = ({ id }) => (
   </div>
 );
 
-export const TerminalSegment: React.FC<{ seg: Segment; txs: Tx[]; explorer: string }> = ({
+export const TerminalSegment: React.FC<{ seg: Segment; txs: Tx[]; explorer: string; chainLabel?: string }> = ({
   seg,
   txs,
   explorer,
+  chainLabel,
 }) => {
   const frame = useCurrentFrame();
   const [idx, total] = chapterPos(seg.id);
@@ -107,7 +111,7 @@ export const TerminalSegment: React.FC<{ seg: Segment; txs: Tx[]; explorer: stri
       {seg.showTxs ? (
         // Reveal the real on-chain hash summary partway through, kept on screen to the end.
         <Sequence from={Math.round(seg.durationInFrames * 0.45)} name="tx-panel">
-          <TxPanel txs={txs} explorer={explorer} />
+          <TxPanel txs={txs} explorer={explorer} chainLabel={chainLabel} />
         </Sequence>
       ) : null}
     </AbsoluteFill>

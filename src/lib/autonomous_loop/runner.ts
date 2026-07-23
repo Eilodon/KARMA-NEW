@@ -43,6 +43,31 @@ export function requireTestnetEnv(env: Record<string, string | undefined>): Test
   return { network: network!, facilitatorUrl: facilitatorUrl! };
 }
 
+export interface CasperTestnetEnv {
+  rpcUrl: string;
+  contractHash: string;
+}
+
+/** Casper sibling of `requireTestnetEnv` — same DP-3 shape, Casper's own env var names
+ *  (`CASPER_RPC_URL` + `KARMA_ODRA_REGISTRY`, matching every other Casper live script in this
+ *  repo, e.g. `register_rwa_oracle_skill.ts`). Throws listing what's missing; rejects mainnet. */
+export function requireCasperTestnetEnv(env: Record<string, string | undefined>): CasperTestnetEnv {
+  const rpcUrl = env.CASPER_RPC_URL;
+  const contractHash = env.KARMA_ODRA_REGISTRY;
+  const missing: string[] = [];
+  if (!rpcUrl) missing.push("CASPER_RPC_URL");
+  if (!contractHash) missing.push("KARMA_ODRA_REGISTRY");
+  if (missing.length > 0) {
+    throw new RunnerConfigError(`--live requires testnet env: ${missing.join(", ")}`);
+  }
+  if (!rpcUrl!.includes("testnet")) {
+    throw new RunnerConfigError(
+      `autonomous loop is testnet-only (DP-3); CASPER_RPC_URL="${rpcUrl!}" rejected`,
+    );
+  }
+  return { rpcUrl: rpcUrl!, contractHash: contractHash! };
+}
+
 export interface DashboardSink {
   jsonPath: string;
   ndjsonPath: string;

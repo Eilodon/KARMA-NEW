@@ -2,6 +2,7 @@
 .venv/
 bin/
 out/
+out_casper/
 remotion/node_modules/
 remotion/public/
 remotion/src/manifest.json

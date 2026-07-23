@@ -4,7 +4,10 @@ import { theme, shortHash } from "../theme";
 import type { Tx } from "../KarmaDemo";
 
 /** Right-side panel listing the real on-chain tx hashes, revealed one by one. */
-export const TxPanel: React.FC<{ txs: Tx[]; explorer: string }> = ({ txs }) => {
+export const TxPanel: React.FC<{ txs: Tx[]; explorer: string; chainLabel?: string }> = ({
+  txs,
+  chainLabel = "Pharos Atlantic",
+}) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const panel = spring({ frame, fps, config: { damping: 200 }, durationInFrames: 16 });
@@ -29,7 +32,7 @@ export const TxPanel: React.FC<{ txs: Tx[]; explorer: string }> = ({ txs }) => {
       }}
     >
       <div style={{ color: theme.dim, fontSize: 20, marginBottom: 16, letterSpacing: 1 }}>
-        ON-CHAIN · Pharos Atlantic
+        ON-CHAIN · {chainLabel}
       </div>
       {txs.map((t, i) => {
         const at = 10 + i * 8;

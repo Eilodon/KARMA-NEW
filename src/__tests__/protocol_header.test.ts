@@ -37,7 +37,7 @@ function makeRes() {
 describe("protocolHeaderValidation – rc2026 final mode", () => {
   afterEach(() => { vi.unstubAllEnvs(); });
 
-  test("missing Mcp-Method header → -32602 (required in rc2026)", async () => {
+  test("missing Mcp-Method header → -32020 (required in rc2026)", async () => {
     const mw = await importMiddlewareWithMode();
     const next = vi.fn() as unknown as NextFunction;
     const req = makeReq({}, { method: "tools/call" });
@@ -46,7 +46,7 @@ describe("protocolHeaderValidation – rc2026 final mode", () => {
     expect(next).not.toHaveBeenCalled();
     expect(res._status).toBe(400);
     const body = res._body as { error: { code: number } };
-    expect(body.error.code).toBe(-32602);
+    expect(body.error.code).toBe(-32020);
   });
 
   test("Mcp-Method present and matching for non-named method → passes", async () => {
@@ -61,7 +61,7 @@ describe("protocolHeaderValidation – rc2026 final mode", () => {
     expect(next).toHaveBeenCalledOnce();
   });
 
-  test("tools/call missing Mcp-Name header → -32602 (required in rc2026)", async () => {
+  test("tools/call missing Mcp-Name header → -32020 (required in rc2026)", async () => {
     const mw = await importMiddlewareWithMode();
     const next = vi.fn() as unknown as NextFunction;
     const req = makeReq(
@@ -73,10 +73,10 @@ describe("protocolHeaderValidation – rc2026 final mode", () => {
     expect(next).not.toHaveBeenCalled();
     expect(res._status).toBe(400);
     const body = res._body as { error: { code: number } };
-    expect(body.error.code).toBe(-32602);
+    expect(body.error.code).toBe(-32020);
   });
 
-  test("Mcp-Method present but mismatched → -32602", async () => {
+  test("Mcp-Method present but mismatched → -32020", async () => {
     const mw = await importMiddlewareWithMode();
     const next = vi.fn() as unknown as NextFunction;
     const req = makeReq(
@@ -88,10 +88,10 @@ describe("protocolHeaderValidation – rc2026 final mode", () => {
     expect(next).not.toHaveBeenCalled();
     expect(res._status).toBe(400);
     const body = res._body as { error: { code: number } };
-    expect(body.error.code).toBe(-32602);
+    expect(body.error.code).toBe(-32020);
   });
 
-  test("Mcp-Method present, Mcp-Name mismatched → -32602", async () => {
+  test("Mcp-Method present, Mcp-Name mismatched → -32020", async () => {
     const mw = await importMiddlewareWithMode();
     const next = vi.fn() as unknown as NextFunction;
     const req = makeReq(
@@ -103,7 +103,7 @@ describe("protocolHeaderValidation – rc2026 final mode", () => {
     expect(next).not.toHaveBeenCalled();
     expect(res._status).toBe(400);
     const body = res._body as { error: { code: number } };
-    expect(body.error.code).toBe(-32602);
+    expect(body.error.code).toBe(-32020);
   });
 
   test("all headers present and all matching → passes", async () => {
@@ -129,7 +129,7 @@ describe("protocolHeaderValidation – rc2026 final mode", () => {
     mw(req, res, next);
     expect(next).not.toHaveBeenCalled();
     expect(res._status).toBe(400);
-    expect((res._body as { error: { code: number; message: string } }).error.code).toBe(-32602);
+    expect((res._body as { error: { code: number; message: string } }).error.code).toBe(-32020);
     expect((res._body as { error: { code: number; message: string } }).error.message).toContain("single-valued");
   });
 

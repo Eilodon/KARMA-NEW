@@ -27,18 +27,37 @@ export type Segment = {
 const M = manifest as unknown as {
   fps: number; width: number; height: number;
   explorer: string; contract: string; txs: Tx[]; segments: Segment[];
+  chainLabel?: string; title?: string; subtitle?: string; liveTag?: string; tagline?: string;
+  outroFeatures?: string[]; outroBuiltOnLine?: string; outroRepoLine?: string;
 };
 
 const Router: React.FC<{ seg: Segment }> = ({ seg }) => {
   switch (seg.kind) {
     case "title":
-      return <TitleCard contract={M.contract} explorer={M.explorer} />;
+      return (
+        <TitleCard
+          contract={M.contract}
+          explorer={M.explorer}
+          title={M.title}
+          subtitle={M.subtitle}
+          liveTag={M.liveTag}
+          tagline={M.tagline}
+        />
+      );
     case "shot":
       return <ShotSegment seg={seg} explorer={M.explorer} />;
     case "outro":
-      return <Outro contract={M.contract} explorer={M.explorer} />;
+      return (
+        <Outro
+          contract={M.contract}
+          explorer={M.explorer}
+          features={M.outroFeatures}
+          builtOnLine={M.outroBuiltOnLine}
+          repoLine={M.outroRepoLine}
+        />
+      );
     default:
-      return <TerminalSegment seg={seg} txs={M.txs} explorer={M.explorer} />;
+      return <TerminalSegment seg={seg} txs={M.txs} explorer={M.explorer} chainLabel={M.chainLabel} />;
   }
 };
 

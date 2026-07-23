@@ -104,6 +104,71 @@ export function rollingSpend(state: LoopState, windowMs: number): bigint {
   return total;
 }
 
+/** Result of the hard safety-rail filter (DP-3 caps) — shared by the deterministic
+ *  `decide()` below and by `decideWithReasoning` in `llm_strategy.ts`. Keeping this as
+ *  its own exported step means an LLM (or any other "brain") only ever gets to choose
+ *  *among* candidates that already cleared the caps — it can never widen them. */
+export type EligibilityResult =
+  | { ok: true; eligible: SkillCandidate[] }
+  | { ok: false; action: LoopAction };
+
+/** Steps 1-3 of the selection rule: circuit breaker → hourly cap → per-candidate caps.
+ *  Pure, and identical to what `decide()` used inline before this was extracted. */
+export function filterEligible(
+  state: LoopState,
+  budget: LoopBudget,
+  candidates: readonly SkillCandidate[],
+  nextTickMs: number = 60_000,
+): EligibilityResult {
+  if (budget.circuitBreakerPaused) {
+    return {
+      ok: false,
+      action: { kind: "noop", reason: "circuit_breaker_paused", sleepMs: nextTickMs },
+    };
+  }
+  const hour = 60 * 60 * 1_000;
+  const spent1h = rollingSpend(state, hour);
+  const remainingHourly = budget.maxHourlyUsdc - spent1h;
+  if (remainingHourly <= 0n) {
+    return {
+      ok: false,
+      action: { kind: "noop", reason: "hourly_cap_exhausted", sleepMs: nextTickMs },
+    };
+  }
+  const eligible = candidates.filter(
+    (c) =>
+      c.pricePerCallUsdc > 0n &&
+      c.pricePerCallUsdc <= state.budgetUsdc &&
+      c.pricePerCallUsdc <= budget.maxPerTxUsdc &&
+      c.pricePerCallUsdc <= remainingHourly &&
+      c.expectedReturnUsdc > c.pricePerCallUsdc,
+  );
+  if (eligible.length === 0) {
+    return {
+      ok: false,
+      action: { kind: "noop", reason: "no_profitable_skill_within_caps", sleepMs: nextTickMs },
+    };
+  }
+  return { ok: true, eligible };
+}
+
+/** Greedy tie-break rule used by `decide()`: highest `expectedReturn - price`, then
+ *  highest reputation, then lowest price. Exported so `llm_strategy.ts` can report
+ *  "what the deterministic loop would have picked" alongside an LLM's reasoned pick. */
+export function pickGreedyBest(eligible: readonly SkillCandidate[]): SkillCandidate {
+  return [...eligible].sort((a, b) => {
+    const da = a.expectedReturnUsdc - a.pricePerCallUsdc;
+    const db = b.expectedReturnUsdc - b.pricePerCallUsdc;
+    if (db !== da) return db > da ? 1 : -1;
+    if (b.reputation !== a.reputation) return b.reputation - a.reputation;
+    return a.pricePerCallUsdc > b.pricePerCallUsdc
+      ? 1
+      : a.pricePerCallUsdc < b.pricePerCallUsdc
+        ? -1
+        : 0;
+  })[0];
+}
+
 /** Pure decision: given the current state + budget + candidates, pick the best action.
  *  Selection rule:
  *    1. Filter to candidates priced at ≤ budgetUsdc AND ≤ maxPerTxUsdc.
@@ -118,37 +183,9 @@ export function decide(
   candidates: readonly SkillCandidate[],
   nextTickMs: number = 60_000,
 ): LoopAction {
-  if (budget.circuitBreakerPaused) {
-    return { kind: "noop", reason: "circuit_breaker_paused", sleepMs: nextTickMs };
-  }
-  const hour = 60 * 60 * 1_000;
-  const spent1h = rollingSpend(state, hour);
-  const remainingHourly = budget.maxHourlyUsdc - spent1h;
-  if (remainingHourly <= 0n) {
-    return { kind: "noop", reason: "hourly_cap_exhausted", sleepMs: nextTickMs };
-  }
-  const eligible = candidates.filter(
-    (c) =>
-      c.pricePerCallUsdc > 0n &&
-      c.pricePerCallUsdc <= state.budgetUsdc &&
-      c.pricePerCallUsdc <= budget.maxPerTxUsdc &&
-      c.pricePerCallUsdc <= remainingHourly &&
-      c.expectedReturnUsdc > c.pricePerCallUsdc,
-  );
-  if (eligible.length === 0) {
-    return { kind: "noop", reason: "no_profitable_skill_within_caps", sleepMs: nextTickMs };
-  }
-  const best = [...eligible].sort((a, b) => {
-    const da = a.expectedReturnUsdc - a.pricePerCallUsdc;
-    const db = b.expectedReturnUsdc - b.pricePerCallUsdc;
-    if (db !== da) return db > da ? 1 : -1;
-    if (b.reputation !== a.reputation) return b.reputation - a.reputation;
-    return a.pricePerCallUsdc > b.pricePerCallUsdc
-      ? 1
-      : a.pricePerCallUsdc < b.pricePerCallUsdc
-        ? -1
-        : 0;
-  })[0];
+  const filtered = filterEligible(state, budget, candidates, nextTickMs);
+  if (!filtered.ok) return filtered.action;
+  const best = pickGreedyBest(filtered.eligible);
   return {
     kind: "invoke",
     skill: best,
@@ -211,7 +248,7 @@ export async function tick(
   const candidates = await adapter.discoverCandidates();
   const action = decide(tickedState, liveBudget, candidates, nextTickMs);
 
-  let nextState = tickedState;
+  let nextState: LoopState;
   if (action.kind === "invoke" && action.skill) {
     const earning = await adapter.invokeSkill(action.skill, tickedState);
     nextState = applyInvocation(tickedState, action.skill, earning);

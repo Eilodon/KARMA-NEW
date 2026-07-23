@@ -19,7 +19,7 @@ describe("pattern debt registry reconciliation", () => {
     expect(byId.get("DEBT-002")?.limitation).toContain("7-day");
     expect(byId.get("DEBT-002")?.implementationGate).toContain("local");
 
-    expect(byId.get("DEBT-003")?.status).toBe("monitoring");
+    expect(byId.get("DEBT-003")?.status).toBe("implemented");
     expect(byId.get("DEBT-003")?.implementationGate).toContain("Do not reintroduce check_task_status or isAsync");
     expect(byId.get("DEBT-003")?.runtimeGuards.join("\n")).toContain("No bespoke polling endpoint");
 
@@ -38,12 +38,12 @@ describe("pattern debt registry reconciliation", () => {
     const summary = getPatternDebtSummary();
 
     expect(summary.activeIds).toContain("DEBT-001");
-    expect(summary.activeIds).toContain("DEBT-003");
     expect(summary.activeIds).toContain("DEBT-005");
     expect(summary.activeIds).not.toContain("DEBT-002");
+    expect(summary.activeIds).not.toContain("DEBT-003");
     expect(summary.activeIds).not.toContain("DEBT-004");
     expect(summary.activeIds).not.toContain("DEBT-006");
-    expect(summary.implemented).toBe(3);
+    expect(summary.implemented).toBe(4);
   });
 
   test("registers a read-only system tool for operational debt visibility", async () => {

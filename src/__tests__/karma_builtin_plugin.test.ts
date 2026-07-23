@@ -12,6 +12,11 @@ describe("isTrustedBuiltInPlugin — KARMA first-party plugin", () => {
     expect(isTrustedBuiltInPlugin("system.tool.js")).toBe(true);
   });
 
+  it("treats casper.tool.ts/js as a trusted in-process built-in (T13-live)", () => {
+    expect(isTrustedBuiltInPlugin("casper.tool.ts")).toBe(true);
+    expect(isTrustedBuiltInPlugin("casper.tool.js")).toBe(true);
+  });
+
   it("does NOT trust arbitrary third-party plugins", () => {
     expect(isTrustedBuiltInPlugin("random.tool.ts")).toBe(false);
     expect(isTrustedBuiltInPlugin("evil.tool.js")).toBe(false);

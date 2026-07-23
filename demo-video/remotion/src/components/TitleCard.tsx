@@ -2,7 +2,20 @@ import React from "react";
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { theme } from "../theme";
 
-export const TitleCard: React.FC<{ contract: string; explorer: string }> = ({ contract }) => {
+export const TitleCard: React.FC<{
+  contract: string;
+  explorer: string;
+  title?: string;
+  subtitle?: string;
+  liveTag?: string;
+  tagline?: string;
+}> = ({
+  contract,
+  title = "KARMA",
+  subtitle = "Verifiable identity + bounded, revocable authority for AI agent economies — built on Terminal3",
+  liveTag = "● LIVE · Terminal3 testnet + Pharos",
+  tagline = "Prove it, don't tell it.",
+}) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const a = spring({ frame, fps, config: { damping: 200 }, durationInFrames: 24 });
@@ -29,7 +42,7 @@ export const TitleCard: React.FC<{ contract: string; explorer: string }> = ({ co
           textShadow: `0 0 60px ${theme.accent}`,
         }}
       >
-        KARMA
+        {title}
       </div>
       <div
         style={{
@@ -42,7 +55,7 @@ export const TitleCard: React.FC<{ contract: string; explorer: string }> = ({ co
           maxWidth: 1200,
         }}
       >
-        Verifiable identity + bounded, revocable authority for AI agent economies — built on Terminal3
+        {subtitle}
       </div>
       <div
         style={{
@@ -64,7 +77,7 @@ export const TitleCard: React.FC<{ contract: string; explorer: string }> = ({ co
             background: "rgba(63,185,80,0.1)",
           }}
         >
-          ● LIVE · Terminal3 testnet + Pharos
+          {liveTag}
         </span>
         <span style={{ color: theme.cyan }}>{contract}</span>
       </div>
@@ -78,7 +91,7 @@ export const TitleCard: React.FC<{ contract: string; explorer: string }> = ({ co
           letterSpacing: 2,
         }}
       >
-        Prove it, don&apos;t tell it.
+        {tagline}
       </div>
     </AbsoluteFill>
   );

@@ -105,11 +105,11 @@ export function buildEpochTree(
   if (leaves.length > size) {
     throw new Error(`[karma:zk] too many leaves ${leaves.length} for depth ${depth} (max ${size})`);
   }
-  let level: bigint[] = new Array(size).fill(0n);
+  let level: bigint[] = new Array<bigint>(size).fill(0n);
   for (let i = 0; i < leaves.length; i++) level[i] = leaves[i];
   const levels: string[][] = [level.map((x) => x.toString())];
   for (let d = 0; d < depth; d++) {
-    const next: bigint[] = new Array(level.length / 2);
+    const next: bigint[] = new Array<bigint>(level.length / 2);
     for (let i = 0; i < next.length; i++) {
       next[i] = F.toObject(poseidon([level[2 * i], level[2 * i + 1]]));
     }
@@ -217,8 +217,8 @@ export function buildCircuitInput(
       score.push("0");
       jobCount.push("0");
       validMask.push("0");
-      pathElements.push(new Array(CIRCUIT_DEPTH).fill("0"));
-      pathIndices.push(new Array(CIRCUIT_DEPTH).fill("0"));
+      pathElements.push(new Array<string>(CIRCUIT_DEPTH).fill("0"));
+      pathIndices.push(new Array<string>(CIRCUIT_DEPTH).fill("0"));
     }
   }
 
@@ -252,9 +252,13 @@ let cachedPoseidon: { poseidon: PoseidonFn; F: PoseidonField } | null = null;
 async function getPoseidon(): Promise<{ poseidon: PoseidonFn; F: PoseidonField }> {
   if (cachedPoseidon) return cachedPoseidon;
   // Dynamic import — circomlibjs is heavy, not every consumer of this module needs it.
+  // circomlibjs ships without type declarations — cast the module shape once, right at the
+  // import boundary, so nothing downstream touches an untyped `any`.
   // @ts-expect-error circomlibjs ships without type declarations
-  const mod = await import("circomlibjs");
-  const poseidon = (await mod.buildPoseidon()) as PoseidonFn & { F: PoseidonField };
+  const mod = (await import("circomlibjs")) as {
+    buildPoseidon(): Promise<PoseidonFn & { F: PoseidonField }>;
+  };
+  const poseidon = await mod.buildPoseidon();
   cachedPoseidon = { poseidon, F: poseidon.F };
   return cachedPoseidon;
 }
@@ -267,12 +271,23 @@ export async function generateRepAggProof(
   const { poseidon, F } = await getPoseidon();
   const { signals, nullifier, epochRoot } = buildCircuitInput(poseidon, F, inputs);
 
-  // Dynamic import again — snarkjs is ~2MB.
+  // Dynamic import again — snarkjs is ~2MB. It ships without first-party type declarations —
+  // cast the module shape once, right at the import boundary, so nothing downstream touches an
+  // untyped `any`.
   // @ts-expect-error snarkjs ships without first-party type declarations
-  const snarkjs = await import("snarkjs");
+  const snarkjs = (await import("snarkjs")) as {
+    groth16: {
+      fullProve(
+        signals: Record<string, string | string[] | string[][]>,
+        wasmPath: string,
+        zkeyPath: string,
+      ): Promise<{ proof: unknown; publicSignals: string[] }>;
+    };
+  };
   // Sanity-check the artifact paths up front so we fail with a clear error.
   for (const p of [artifacts.wasmPath, artifacts.zkeyPath]) {
     try {
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- caller-supplied artifact path, not user input
       readFileSync(p);
     } catch {
       throw new Error(`[karma:zk] artifact not readable: ${p}`);

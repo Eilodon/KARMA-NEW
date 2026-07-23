@@ -38,6 +38,15 @@ export interface PaymentReceipt {
   asset: string;
   /** CAIP-2-ish network identifier (e.g. "stellar:testnet", "casper:testnet", "pharos:atlantic"). */
   network: string;
+  /** Off-chain payment-authorization signature (hex), present when the rail signs before it
+   *  settles (e.g. an EIP-712/CEP-3009-style authorization). Superseded by `txHash` once real
+   *  on-chain settlement confirms — a receipt with `signature` set but no `txHash` means "signed,
+   *  not yet settled on-chain," never treat `signature` as a chain hash. */
+  signature?: string;
+  /** Set when the rail attempted real on-chain settlement and it failed (network error, reverted
+   *  tx, etc) — the payment authorization itself (`signature`) may still be valid and relayable
+   *  later. Absent on success or when settlement wasn't attempted at all. */
+  settlementError?: string;
 }
 
 /** Quote returned by `quote` — informational, no commitment to pay. */

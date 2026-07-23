@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KARMA — autonomous loop dashboard</title>
+<style>
+  :root{
+    --bg:#0d0f12; --surface:#15181c; --surface-2:#1b1f24;
+    --ink:#eef0f2; --ink-soft:#9aa3ac; --ink-faint:#5f6870;
+    --accent:#ef4d3d; --good:#34c77b; --good-soft:#123420;
+    --bad:#e0554a; --bad-soft:#3a1310;
+    --border:#262b31; --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 32px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    line-height:1.5;
+  }
+  .wrap{max-width:920px;margin:0 auto;padding:40px 24px 80px;}
+  h1{font-size:26px;font-weight:800;margin:0 0 6px;}
+  .lede{color:var(--ink-soft);font-size:14px;margin:0 0 26px;max-width:70ch;}
+  code{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.92em;background:var(--surface-2);padding:.1em .4em;border-radius:4px;}
+
+  .controls{
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:14px 16px; margin:0 0 22px; box-shadow:var(--shadow);
+  }
+  .controls input[type=text]{
+    flex:1 1 260px; min-width:200px; background:var(--surface-2); border:1px solid var(--border);
+    color:var(--ink); padding:8px 10px; border-radius:8px; font-family:ui-monospace,monospace; font-size:13px;
+  }
+  button, .filebtn{
+    font-size:13px; font-weight:600; padding:8px 14px; border-radius:8px; border:1px solid var(--border);
+    background:var(--surface-2); color:var(--ink); cursor:pointer;
+  }
+  button.primary{background:var(--accent); border-color:var(--accent); color:#1a0805;}
+  .status{font-size:12.5px; color:var(--ink-faint); font-family:ui-monospace,monospace;}
+  .status.ok{color:var(--good);}
+  .status.err{color:var(--bad);}
+
+  .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin:0 0 22px;}
+  .stat{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px 18px; box-shadow:var(--shadow);}
+  .stat .k{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); margin:0 0 6px;}
+  .stat .v{font-size:22px; font-weight:800; font-family:ui-monospace,monospace;}
+  .stat .v.good{color:var(--good);}
+  .stat .v.bad{color:var(--bad);}
+
+  h2{font-size:15px; font-weight:700; margin:26px 0 10px; color:var(--ink);}
+  .twrap{border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:var(--shadow);}
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th{
+    text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-faint); padding:9px 14px; background:var(--surface-2); border-bottom:1px solid var(--border);
+  }
+  td{padding:9px 14px; border-bottom:1px solid var(--border); background:var(--surface); font-family:ui-monospace,monospace;}
+  tr:last-child td{border-bottom:none;}
+  .pill{display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:100px;}
+  .pill.spend{background:var(--bad-soft); color:var(--bad);}
+  .pill.earn{background:var(--good-soft); color:var(--good);}
+  .empty{padding:24px; text-align:center; color:var(--ink-faint); font-size:13px; background:var(--surface);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>KARMA autonomous economic loop — live dashboard</h1>
+  <p class="lede">
+    Reads the JSON snapshot <code>src/lib/autonomous_loop/dashboard.ts</code> writes on every tick
+    (<code>writeJsonSnapshot</code>) — the file <code>run_autonomous_loop.ts</code> /
+    <code>run_autonomous_loop_casper.ts</code> update each iteration. Two ways to load it: point
+    <code>fetch()</code> at a URL (works when this page is served over http/https, e.g. a local
+    static server or GitHub Pages next to a synced dashboard file), or pick the JSON file straight
+    off disk — no server needed either way.
+  </p>
+
+  <div class="controls">
+    <input id="pathInput" type="text" placeholder="dashboard/autonomous_loop_casper.json (or a full URL)" value="dashboard/autonomous_loop_casper.json" />
+    <button id="fetchBtn">Fetch once</button>
+    <button id="pollBtn">Poll every 1s</button>
+    <label class="filebtn" for="fileInput">Load file…</label>
+    <input id="fileInput" type="file" accept="application/json" style="display:none" />
+    <span id="status" class="status">idle</span>
+  </div>
+
+  <div class="grid" id="statGrid">
+    <div class="stat"><div class="k">Iterations</div><div class="v" id="statIterations">—</div></div>
+    <div class="stat"><div class="k">Budget remaining</div><div class="v" id="statBudget">—</div></div>
+    <div class="stat"><div class="k">Net P&amp;L</div><div class="v" id="statPnl">—</div></div>
+    <div class="stat"><div class="k">Gross spend</div><div class="v" id="statSpend">—</div></div>
+    <div class="stat"><div class="k">Gross earnings</div><div class="v" id="statEarnings">—</div></div>
+    <div class="stat"><div class="k">Last action</div><div class="v" id="statLastAction" style="font-size:14px;">—</div></div>
+  </div>
+
+  <h2>Recent activity (from this snapshot)</h2>
+  <div class="twrap" id="activityWrap">
+    <div class="empty">No data loaded yet — fetch, poll, or load a file above.</div>
+  </div>
+</div>
+
+<script>
+// ---- pure-ish rendering logic (kept separate from the fetch/DOM glue so it's easy to reason
+// about / smoke-test against a captured real JSON snapshot — see the shape `dashboard.ts`'s
+// `snapshot()` produces: { state: {...}, lastAction: {...}, totals: {...}, writtenAt } ) ----
+
+function usd(stroopsStr) {
+  var n = Number(stroopsStr) / 1e7;
+  var sign = n < 0 ? "-" : "";
+  return sign + "$" + Math.abs(n).toFixed(4);
+}
+
+function fmtTime(ms) {
+  try { return new Date(ms).toLocaleTimeString(); } catch (e) { return String(ms); }
+}
+
+function renderRecord(record) {
+  var s = record.state;
+  var totals = record.totals;
+  document.getElementById("statIterations").textContent = String(s.iterations);
+  document.getElementById("statBudget").textContent = usd(s.budgetUsdc);
+  var pnl = Number(totals.netPnlUsdcStroops);
+  var pnlEl = document.getElementById("statPnl");
+  pnlEl.textContent = usd(totals.netPnlUsdcStroops);
+  pnlEl.className = "v " + (pnl > 0 ? "good" : pnl < 0 ? "bad" : "");
+  document.getElementById("statSpend").textContent = usd(totals.spendUsdcStroops);
+  document.getElementById("statEarnings").textContent = usd(totals.earningsUsdcStroops);
+
+  var la = record.lastAction;
+  var laText = la.kind === "invoke"
+    ? "invoke → " + (la.skillName || la.skillId || "?")
+    : (la.kind + (la.reason ? " (" + la.reason + ")" : ""));
+  document.getElementById("statLastAction").textContent = laText;
+
+  // Merge spends + earnings into one time-sorted activity feed (both arrays are latest-first
+  // per loop.ts's `applyInvocation`, so no re-sort needed within each list — just interleave).
+  var rows = [];
+  (s.spends || []).forEach(function (sp) {
+    rows.push({ at: sp.at, kind: "spend", label: sp.skillId, amount: sp.amountUsdc });
+  });
+  (s.earnings || []).forEach(function (e) {
+    rows.push({ at: e.at, kind: "earn", label: e.source, amount: e.amountUsdc });
+  });
+  rows.sort(function (a, b) { return b.at - a.at; });
+
+  var wrap = document.getElementById("activityWrap");
+  if (rows.length === 0) {
+    wrap.innerHTML = '<div class="empty">No spend/earning events in this snapshot yet — still ticking, or every tick so far was a noop.</div>';
+    return;
+  }
+  var html = "<table><thead><tr><th>Time</th><th>Type</th><th>Skill / source</th><th>Amount</th></tr></thead><tbody>";
+  rows.slice(0, 50).forEach(function (r) {
+    html += "<tr><td>" + fmtTime(r.at) + "</td><td><span class=\"pill " + r.kind + "\">" + r.kind + "</span></td>" +
+      "<td>" + r.label + "</td><td>" + usd(r.amount) + "</td></tr>";
+  });
+  html += "</tbody></table>";
+  wrap.innerHTML = html;
+}
+
+function setStatus(text, cls) {
+  var el = document.getElementById("status");
+  el.textContent = text;
+  el.className = "status" + (cls ? " " + cls : "");
+}
+
+var pollTimer = null;
+
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  document.getElementById("pollBtn").textContent = "Poll every 1s";
+}
+
+async function fetchOnce() {
+  var path = document.getElementById("pathInput").value.trim();
+  if (!path) { setStatus("enter a path or URL first", "err"); return; }
+  try {
+    var res = await fetch(path, { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    var record = await res.json();
+    renderRecord(record);
+    setStatus("loaded " + path + " @ " + new Date().toLocaleTimeString(), "ok");
+  } catch (e) {
+    setStatus(
+      "fetch failed (" + (e && e.message ? e.message : e) + ") — if you opened this file " +
+      "directly (file://), browsers block fetch() against local paths; use “Load file…” instead, " +
+      "or serve this folder over http.",
+      "err",
+    );
+  }
+}
+
+document.getElementById("fetchBtn").addEventListener("click", fetchOnce);
+
+document.getElementById("pollBtn").addEventListener("click", function () {
+  if (pollTimer) { stopPolling(); return; }
+  fetchOnce();
+  pollTimer = setInterval(fetchOnce, 1000);
+  document.getElementById("pollBtn").textContent = "Stop polling";
+});
+
+document.getElementById("fileInput").addEventListener("change", function (evt) {
+  var file = evt.target.files && evt.target.files[0];
+  if (!file) return;
+  stopPolling();
+  var reader = new FileReader();
+  reader.onload = function () {
+    try {
+      var record = JSON.parse(String(reader.result));
+      renderRecord(record);
+      setStatus("loaded from file: " + file.name + " @ " + new Date().toLocaleTimeString(), "ok");
+    } catch (e) {
+      setStatus("could not parse " + file.name + " as JSON (" + e.message + ")", "err");
+    }
+  };
+  reader.readAsText(file);
+});
+</script>
+</body>
+</html>

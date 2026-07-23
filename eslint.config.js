@@ -14,10 +14,11 @@ export default tseslint.config(
   {
     plugins: { n },
     rules: {
-      // fetch/Response are global and usable on the Node 20.3 floor (global since Node 18);
-      // the rule only marks them "experimental until 21" — ignore those two specifically while
-      // still catching genuinely newer builtins. Used by the KMS providers + their tests.
-      "n/no-unsupported-features/node-builtins": ["error", { version: ">=20.3.0", ignores: ["fetch", "Response"] }],
+      // fetch/Response/ReadableStream are global and usable on the Node 20.3 floor (global
+      // since Node 18); the rule only marks them "experimental until 21/23" — ignore those
+      // specifically while still catching genuinely newer builtins. Used by the KMS providers +
+      // their tests, and by the SSE stream reader in http_resources_prompts_conformance.test.ts.
+      "n/no-unsupported-features/node-builtins": ["error", { version: ">=20.3.0", ignores: ["fetch", "Response", "ReadableStream"] }],
     },
   },
 

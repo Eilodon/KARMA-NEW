@@ -24,7 +24,23 @@ const Feature: React.FC<{ text: string; delay: number }> = ({ text, delay }) => 
   );
 };
 
-export const Outro: React.FC<{ contract: string; explorer: string }> = ({ contract, explorer }) => {
+export const Outro: React.FC<{
+  contract: string;
+  explorer: string;
+  features?: string[];
+  builtOnLine?: string;
+  repoLine?: string;
+}> = ({
+  contract,
+  features = [
+    "Verifiable DID identity — SIWE / EIP-191",
+    "TEE-signed, bounded, revocable delegation",
+    "Dual-layer trust — identity + on-chain reputation",
+    "8 T3N tools · ~23 SDK surfaces · 457 tests green",
+  ],
+  builtOnLine = "Built on Terminal3 · verifiable on-chain",
+  repoLine = "github.com/Eilodon/KARMA · @terminal3/t3n-sdk",
+}) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const a = spring({ frame, fps, config: { damping: 200 }, durationInFrames: 22 });
@@ -53,10 +69,9 @@ export const Outro: React.FC<{ contract: string; explorer: string }> = ({ contra
       </div>
 
       <div style={{ marginTop: 36, display: "flex", flexDirection: "column", gap: 16 }}>
-        <Feature text="Verifiable DID identity — SIWE / EIP-191" delay={8} />
-        <Feature text="TEE-signed, bounded, revocable delegation" delay={16} />
-        <Feature text="Dual-layer trust — identity + on-chain reputation" delay={24} />
-        <Feature text="8 T3N tools · ~23 SDK surfaces · 457 tests green" delay={32} />
+        {features.map((text, i) => (
+          <Feature key={text} text={text} delay={8 + i * 8} />
+        ))}
       </div>
 
       <div
@@ -69,9 +84,9 @@ export const Outro: React.FC<{ contract: string; explorer: string }> = ({ contra
           textAlign: "center",
         }}
       >
-        <div style={{ color: theme.dim, fontSize: 22, marginBottom: 8 }}>Built on Terminal3 · verifiable on-chain</div>
+        <div style={{ color: theme.dim, fontSize: 22, marginBottom: 8 }}>{builtOnLine}</div>
         {contract}
-        <div style={{ color: theme.dim, fontSize: 22, marginTop: 8 }}>github.com/Eilodon/KARMA · @terminal3/t3n-sdk</div>
+        <div style={{ color: theme.dim, fontSize: 22, marginTop: 8 }}>{repoLine}</div>
       </div>
 
       <div

@@ -25,6 +25,7 @@ import { keystoreManager } from "../lib/keystore.js";
 import { realKarmaService } from "../lib/karma_service.js";
 import { identitySessions, SESSION_TTL_MS } from "../lib/identity_session.js";
 import { ENV } from "../config/env.js";
+import { getRequestContext } from "../security/context.js";
 import type { ToolDefinition } from "../mcp/adapter/tool_registry.js";
 
 // The T3N SDK defaults to the `production` environment, whose node (cn-api.sg.prod…)
@@ -222,9 +223,12 @@ export function createT3Tools(): ToolDefinition[] {
       handler: async (args) => {
         const { agent_id } = args as { agent_id: string };
 
-        if (!keystoreManager.has(agent_id)) {
-          throw new Error(`[T3N] Agent not found in keystore: ${agent_id}`);
-        }
+        // STRIDE-S: keystoreManager.has() alone only checks existence, not tenant ownership — any
+        // tenant that knows another tenant's agent_id could otherwise drive this T3N identity/audit
+        // flow on their behalf. assertOwnedBy() throws "Agent not found" first (unknown agents) and
+        // a generic "not accessible to this tenant" otherwise, matching realKarmaService's addressOf.
+        const { tenantId } = getRequestContext();
+        keystoreManager.assertOwnedBy(agent_id, tenantId);
 
         const wasm = await getWasm();
         const ethSignHandler = buildEthSignHandler(agent_id);
@@ -393,9 +397,12 @@ export function createT3Tools(): ToolDefinition[] {
           );
         }
 
-        if (!keystoreManager.has(agent_id)) {
-          throw new Error(`[T3N] Agent not found in keystore: ${agent_id}`);
-        }
+        // STRIDE-S: keystoreManager.has() alone only checks existence, not tenant ownership — any
+        // tenant that knows another tenant's agent_id could otherwise drive this T3N identity/audit
+        // flow on their behalf. assertOwnedBy() throws "Agent not found" first (unknown agents) and
+        // a generic "not accessible to this tenant" otherwise, matching realKarmaService's addressOf.
+        const { tenantId } = getRequestContext();
+        keystoreManager.assertOwnedBy(agent_id, tenantId);
 
         const { client, did } = await createAuthenticatedClient(agent_id);
         const usage = await client.getUsage();
@@ -441,9 +448,12 @@ export function createT3Tools(): ToolDefinition[] {
           );
         }
 
-        if (!keystoreManager.has(agent_id)) {
-          throw new Error(`[T3N] Agent not found in keystore: ${agent_id}`);
-        }
+        // STRIDE-S: keystoreManager.has() alone only checks existence, not tenant ownership — any
+        // tenant that knows another tenant's agent_id could otherwise drive this T3N identity/audit
+        // flow on their behalf. assertOwnedBy() throws "Agent not found" first (unknown agents) and
+        // a generic "not accessible to this tenant" otherwise, matching realKarmaService's addressOf.
+        const { tenantId } = getRequestContext();
+        keystoreManager.assertOwnedBy(agent_id, tenantId);
 
         const { client, did } = await createAuthenticatedClient(agent_id);
         const events = await client.getAuditEvents();
@@ -503,9 +513,12 @@ export function createT3Tools(): ToolDefinition[] {
           );
         }
 
-        if (!keystoreManager.has(agent_id)) {
-          throw new Error(`[T3N] Agent not found in keystore: ${agent_id}`);
-        }
+        // STRIDE-S: keystoreManager.has() alone only checks existence, not tenant ownership — any
+        // tenant that knows another tenant's agent_id could otherwise drive this T3N identity/audit
+        // flow on their behalf. assertOwnedBy() throws "Agent not found" first (unknown agents) and
+        // a generic "not accessible to this tenant" otherwise, matching realKarmaService's addressOf.
+        const { tenantId } = getRequestContext();
+        keystoreManager.assertOwnedBy(agent_id, tenantId);
 
         const timestamp = Date.now();
         const payload = `KARMA job commitment: job_id=${job_id}, skill_id=${skill_id}, did=${String(did)}, ts=${timestamp}`;
@@ -607,9 +620,12 @@ export function createT3Tools(): ToolDefinition[] {
             `[T3N] Agent '${agent_id}' not T3N-verified. Call t3_verify_identity first.`,
           );
         }
-        if (!keystoreManager.has(agent_id)) {
-          throw new Error(`[T3N] Agent not found in keystore: ${agent_id}`);
-        }
+        // STRIDE-S: keystoreManager.has() alone only checks existence, not tenant ownership — any
+        // tenant that knows another tenant's agent_id could otherwise drive this T3N identity/audit
+        // flow on their behalf. assertOwnedBy() throws "Agent not found" first (unknown agents) and
+        // a generic "not accessible to this tenant" otherwise, matching realKarmaService's addressOf.
+        const { tenantId } = getRequestContext();
+        keystoreManager.assertOwnedBy(agent_id, tenantId);
 
         const sortedFunctions = [...new Set(functions)].sort();
         const ttl = BigInt(ttl_secs ?? 3600);
@@ -776,9 +792,12 @@ export function createT3Tools(): ToolDefinition[] {
             `[T3N] No issued credential found for agent '${agent_id}'. Call t3_authorize_payroll_agent first.`,
           );
         }
-        if (!keystoreManager.has(agent_id)) {
-          throw new Error(`[T3N] Agent not found in keystore: ${agent_id}`);
-        }
+        // STRIDE-S: keystoreManager.has() alone only checks existence, not tenant ownership — any
+        // tenant that knows another tenant's agent_id could otherwise drive this T3N identity/audit
+        // flow on their behalf. assertOwnedBy() throws "Agent not found" first (unknown agents) and
+        // a generic "not accessible to this tenant" otherwise, matching realKarmaService's addressOf.
+        const { tenantId } = getRequestContext();
+        keystoreManager.assertOwnedBy(agent_id, tenantId);
 
         const { client } = await createAuthenticatedClient(agent_id);
         const baseUrl = ENV.T3N_NODE_URL ?? getNodeUrl();

@@ -17,7 +17,7 @@ extern crate std;
 use super::*;
 use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env, Vec as SVec};
 
-fn boot(env: &Env) -> (Address, AgentCredentialVerifierClient) {
+fn boot(env: &Env) -> (Address, AgentCredentialVerifierClient<'_>) {
     let admin = Address::generate(env);
     let contract_id = env.register(AgentCredentialVerifier, (admin.clone(),));
     let client = AgentCredentialVerifierClient::new(env, &contract_id);

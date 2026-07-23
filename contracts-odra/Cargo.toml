@@ -2,26 +2,34 @@
 name = "karma-odra"
 version = "0.1.0"
 edition = "2021"
-license = "BUSL-1.1"
+license = "Apache-2.0"
 description = "KARMA AgentSkillRegistry — Odra port for Casper Network (Casper Agentic Buildathon T9)."
 
 [lib]
-crate-type = ["rlib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # Pin EXACT version (=2.8.1) to prevent silent Odra-macros churn between local builds and CI
 # (the risk register flagged this as Odra version churn — mitigation: pin in Cargo.toml).
 # Bump deliberately; do not relax to a caret range.
-odra = { version = "=2.8.1", default-features = false }
+odra = { version = "=2.8.2", default-features = false }
+# CEP-18 + CEP-3009 (EIP-712 transfer_with_authorization) building blocks for the x402 settlement
+# token — same Odra team, same version pin as `odra` itself. See
+# docs/rfc/2026-07-21-x402-casper-eip712-interop.md §5.0.
+odra-modules = { version = "=2.8.2", default-features = false, features = ["eip712"] }
+
+[build-dependencies]
+odra-build = "=2.8.2"
 
 [dev-dependencies]
-odra-test = "=2.8.1"
+odra-test = "=2.8.2"
+# Property-based invariant tests (escrow conservation, reputation bounds) — dev-only, never
+# compiled into the deployed wasm (see contracts-odra/README.md's wasm-build verification note).
+proptest = "1"
 
-# `cargo odra build` (WASM compilation for Casper deployment) needs the `odra-build` crate
-# wired through `bin/build_contract.rs` and `bin/build_schema.rs`. Those entry points are
-# scaffolded in `bin/` for the deployment path but kept out of `cargo test` (the TDD loop)
-# to avoid pulling `odra-build` into the regular link graph — Odra's CLI invokes them via
-# its own cargo profile when the WASM artifact is needed.
+# WASM compilation for Casper deployment: run `./build-wasm.sh`, not `cargo odra build` (the
+# cargo-odra 0.1.7 CLI doesn't match this odra-build API version — see contracts-odra/README.md
+# § "wasm32 build — how this actually works" for the full diagnosis and the working recipe).
 
 [profile.release]
 codegen-units = 1

@@ -1,7 +1,23 @@
+// `#[odra::module(events = [...])]`'s schema-generation codegen chains one iterator per listed
+// event (Chain<Chain<Chain<...>>>) to build the contract schema; past ~30 events (P4-A's panel-
+// arbitration additions pushed AgentSkillRegistry over that) the resulting nested type exceeds
+// rustc's default 128 query-recursion limit during layout computation (test builds only —
+// `cargo check` doesn't hit this path). Raised, not worked around: no code shape avoids this
+// short of removing events, which isn't the goal.
+#![recursion_limit = "256"]
 // Odra's `#[odra::module]` macro emits `#[cfg(odra_module)]` blocks (its WASM-vs-test gate).
 // The cfg name isn't known to rustc, so the lint fires once per attribute — silenced here at
 // the crate root rather than per-call site.
 #![allow(unexpected_cfgs)]
+// Casper entry points take primitive args directly (no nested-struct params in the ABI), so
+// wider contract methods and the `#[odra::module]`/`delegate!`-generated wrappers around them
+// (e.g. CEP3009's `transfer_with_authorization`) legitimately exceed clippy's default arg count.
+#![allow(clippy::too_many_arguments)]
+// The real Casper deploy target (wasm32-unknown-unknown) has no std runtime — pulling in
+// `odra-casper-wasm-env`'s panic handler alongside `std`'s otherwise collides on the
+// `panic_impl` lang item. `cargo test` (native, non-wasm32) keeps std throughout; only the
+// wasm32 artifact goes no_std. `odra::prelude` re-exports the `alloc` types the contract needs.
+#![cfg_attr(target_arch = "wasm32", no_std)]
 
 //! KARMA Odra port — Casper Agentic Buildathon T9.
 //!
@@ -23,3 +39,4 @@
 //!     `MAX_REPUTATION` on the Solidity side.
 
 pub mod agent_skill_registry;
+pub mod x402_settlement_token;
