@@ -31,13 +31,13 @@ importers:
         version: 4.1.1
       '@modelcontextprotocol/express':
         specifier: ^2.0.0-beta.3
-        version: 2.0.0-beta.3(@modelcontextprotocol/server@2.0.0-beta.3)(express@5.2.1)
+        version: 2.0.0-beta.3(@modelcontextprotocol/server@2.0.0-beta.4)(express@5.2.1)
       '@modelcontextprotocol/node':
         specifier: ^2.0.0-beta.4
-        version: 2.0.0-beta.4(@modelcontextprotocol/server@2.0.0-beta.3)(hono@4.12.30)
+        version: 2.0.0-beta.4(@modelcontextprotocol/server@2.0.0-beta.4)(hono@4.12.30)
       '@modelcontextprotocol/server':
-        specifier: ^2.0.0-beta.2
-        version: 2.0.0-beta.3
+        specifier: ^2.0.0-beta.4
+        version: 2.0.0-beta.4
       '@opentelemetry/api':
         specifier: ^1.9.0
         version: 1.9.1
@@ -664,6 +664,10 @@ packages:
   '@js-sdsl/ordered-map@4.4.2':
     resolution: {integrity: sha512-iUKgm52T8HOE/makSxjqoWhe95ZJA1/G1sYsGev2JDKUSS14KAgg1LHb+Ba+IPow0xflbnSkOsZcO08C7w1gYw==}
 
+  '@modelcontextprotocol/core@2.0.0-beta.4':
+    resolution: {integrity: sha512-nsMXd4wQBKzmph6r+WOhum+mXjDYljTAqwY/XUg3hLtvNOQ8+JVqBSJOVCMJvx9lXhTpTOPrGZ3BuNiaNPjSvg==}
+    engines: {node: '>=20'}
+
   '@modelcontextprotocol/express@2.0.0-beta.3':
     resolution: {integrity: sha512-CDJ38z1eqtKK2fXGJnH+icIGoAj2ZZRfFPnTDVE59btTzJ7wqfDa/Rh1PO+c/vFhMQuhe8/CQX36vNiGkR4dbw==}
     engines: {node: '>=20'}
@@ -681,8 +685,8 @@ packages:
       hono:
         optional: true
 
-  '@modelcontextprotocol/server@2.0.0-beta.3':
-    resolution: {integrity: sha512-EQxVIWf2XMAgjR38ZRZnX1iiOWH42tT/YJG8N4dVjAnrEGSEfPirR6FYfDC72yuNSvVYbPDTD1H3KHLLHPd18A==}
+  '@modelcontextprotocol/server@2.0.0-beta.4':
+    resolution: {integrity: sha512-pjMZcNEt1dOq0aJCcY3b7w1Ayh+qmQN2xlfTELcGV9yiAjEGIczBPBLWWW0k0zzo5T8kiv15jtKPsWeHGxLvLg==}
     engines: {node: '>=20'}
 
   '@napi-rs/lzma-android-arm-eabi@1.4.5':
@@ -3961,21 +3965,26 @@ snapshots:
 
   '@js-sdsl/ordered-map@4.4.2': {}
 
-  '@modelcontextprotocol/express@2.0.0-beta.3(@modelcontextprotocol/server@2.0.0-beta.3)(express@5.2.1)':
+  '@modelcontextprotocol/core@2.0.0-beta.4':
     dependencies:
-      '@modelcontextprotocol/server': 2.0.0-beta.3
+      zod: 4.4.3
+
+  '@modelcontextprotocol/express@2.0.0-beta.3(@modelcontextprotocol/server@2.0.0-beta.4)(express@5.2.1)':
+    dependencies:
+      '@modelcontextprotocol/server': 2.0.0-beta.4
       cors: 2.8.6
       express: 5.2.1
 
-  '@modelcontextprotocol/node@2.0.0-beta.4(@modelcontextprotocol/server@2.0.0-beta.3)(hono@4.12.30)':
+  '@modelcontextprotocol/node@2.0.0-beta.4(@modelcontextprotocol/server@2.0.0-beta.4)(hono@4.12.30)':
     dependencies:
       '@hono/node-server': 2.0.11(hono@4.12.30)
-      '@modelcontextprotocol/server': 2.0.0-beta.3
+      '@modelcontextprotocol/server': 2.0.0-beta.4
     optionalDependencies:
       hono: 4.12.30
 
-  '@modelcontextprotocol/server@2.0.0-beta.3':
+  '@modelcontextprotocol/server@2.0.0-beta.4':
     dependencies:
+      '@modelcontextprotocol/core': 2.0.0-beta.4
       zod: 4.4.3
 
   '@napi-rs/lzma-android-arm-eabi@1.4.5':
