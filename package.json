@@ -1,7 +1,7 @@
 {
   "name": "karma",
   "version": "1.0.0",
-  "description": "KARMA — identity, reputation, and dispute-gated escrow for agent-to-agent skill calls, spoken over MCP. Casper Agentic Buildathon submission.",
+  "description": "KARMA — identity, reputation, and dispute-gated escrow for agent-to-agent skill calls, spoken over MCP. Reference implementations on Casper, Stellar, Pharos, and X Layer (OKX.AI Genesis Hackathon).",
   "license": "Apache-2.0",
   "type": "module",
   "main": "dist/index.js",
@@ -58,6 +58,7 @@
     "@stellar/stellar-sdk": "16.0.1",
     "@terminal3/t3n-sdk": "3.10.1",
     "@x402/core": "^2.17.0",
+    "@x402/evm": "^2.17.0",
     "@x402/stellar": "^2.16.0",
     "ajv": "^8.17.1",
     "blake2b": "^2.1.4",

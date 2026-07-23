@@ -1,6 +1,7 @@
 import { ENV } from "../../config/env.js";
 import { StellarX402Plugin } from "../../plugins/x402_stellar.js";
 import { CasperX402Plugin } from "../../plugins/x402_casper.js";
+import { XLayerX402Plugin } from "../../plugins/x402_xlayer.js";
 import { paymentPlugins } from "./registry.js";
 import type { PaymentPluginRegistry } from "./registry.js";
 import type { IPaymentPlugin } from "./plugin.js";
@@ -11,6 +12,7 @@ import type { IPaymentPlugin } from "./plugin.js";
  * Env-gated per rail (T7/T11):
  *   • KARMA_X402_STELLAR_FACILITATOR_URL  → register StellarX402Plugin
  *   • KARMA_X402_CASPER_FACILITATOR_URL   → register CasperX402Plugin
+ *   • KARMA_X402_XLAYER_FACILITATOR_URL   → register XLayerX402Plugin
  *
  * Unset URL ⇒ plugin not registered ⇒ `create_job(settlement_rail:"x402")` for that network
  * fails closed with `payment_plugin_not_registered`. This keeps the escrow path the only
@@ -25,6 +27,8 @@ export interface PaymentBootEnv {
   KARMA_X402_STELLAR_FACILITATOR_URL?: string;
   /** Casper x402 facilitator URL. Falsy/undefined ⇒ CasperX402Plugin not registered. */
   KARMA_X402_CASPER_FACILITATOR_URL?: string;
+  /** X Layer x402 facilitator URL (OKX Payment SDK). Falsy/undefined ⇒ XLayerX402Plugin not registered. */
+  KARMA_X402_XLAYER_FACILITATOR_URL?: string;
   /** `X402SettlementToken` package hash — forwarded to `CasperX402Plugin`'s constructor options.
    *  Falsy/undefined ⇒ plugin still registers (facilitator URL gates that), but `payWithEnvelope`
    *  throws at call time until this is set. */
@@ -78,6 +82,12 @@ export function registerConfiguredPaymentPlugins(
         settlementTokenPackageHash: env.KARMA_X402_CASPER_SETTLEMENT_TOKEN,
       }),
     env.KARMA_X402_CASPER_FACILITATOR_URL ? null : "KARMA_X402_CASPER_FACILITATOR_URL not set",
+  );
+
+  tryRegister(
+    "x402-xlayer",
+    () => new XLayerX402Plugin(env.KARMA_X402_XLAYER_FACILITATOR_URL ?? ""),
+    env.KARMA_X402_XLAYER_FACILITATOR_URL ? null : "KARMA_X402_XLAYER_FACILITATOR_URL not set",
   );
 
   return { registered, skipped };

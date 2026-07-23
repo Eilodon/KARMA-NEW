@@ -14,9 +14,10 @@ describe("registerConfiguredPaymentPlugins (T7/T11 boot wiring)", () => {
     const registry = new PaymentPluginRegistry();
     const report = registerConfiguredPaymentPlugins({ env: {}, registry });
     expect(report.registered).toEqual([]);
-    expect(report.skipped.map((s) => s.id).sort()).toEqual(["x402-casper", "x402-stellar"]);
+    expect(report.skipped.map((s) => s.id).sort()).toEqual(["x402-casper", "x402-stellar", "x402-xlayer"]);
     expect(report.skipped.find((s) => s.id === "x402-stellar")?.reason).toMatch(/STELLAR_FACILITATOR_URL/);
     expect(report.skipped.find((s) => s.id === "x402-casper")?.reason).toMatch(/CASPER_FACILITATOR_URL/);
+    expect(report.skipped.find((s) => s.id === "x402-xlayer")?.reason).toMatch(/XLAYER_FACILITATOR_URL/);
     expect(registry.list()).toEqual([]);
   });
 
@@ -43,18 +44,31 @@ describe("registerConfiguredPaymentPlugins (T7/T11 boot wiring)", () => {
     expect(registry.resolve("x402", "casper:casper")?.id).toBe("x402-casper");
   });
 
-  it("registers BOTH plugins when both URLs are set", () => {
+  it("registers x402-xlayer when KARMA_X402_XLAYER_FACILITATOR_URL is set", () => {
+    const registry = new PaymentPluginRegistry();
+    const report = registerConfiguredPaymentPlugins({
+      env: { KARMA_X402_XLAYER_FACILITATOR_URL: "https://facilitator.okx.ai" },
+      registry,
+    });
+    expect(report.registered).toEqual(["x402-xlayer"]);
+    expect(registry.resolve("x402", "eip155:1952")?.id).toBe("x402-xlayer");
+    expect(registry.resolve("x402", "eip155:196")?.id).toBe("x402-xlayer");
+    expect(registry.resolve("x402", "casper:mainnet")).toBeNull();
+  });
+
+  it("registers ALL THREE plugins when all facilitator URLs are set", () => {
     const registry = new PaymentPluginRegistry();
     const report = registerConfiguredPaymentPlugins({
       env: {
         KARMA_X402_STELLAR_FACILITATOR_URL: "https://www.x402.org/facilitator",
         KARMA_X402_CASPER_FACILITATOR_URL: "https://x402-facilitator.casper.network",
+        KARMA_X402_XLAYER_FACILITATOR_URL: "https://facilitator.okx.ai",
       },
       registry,
     });
-    expect(report.registered.sort()).toEqual(["x402-casper", "x402-stellar"]);
+    expect(report.registered.sort()).toEqual(["x402-casper", "x402-stellar", "x402-xlayer"]);
     expect(report.skipped).toEqual([]);
-    expect(registry.list()).toHaveLength(2);
+    expect(registry.list()).toHaveLength(3);
   });
 
   it("default reset=true makes a second call idempotent (no duplicate-id throw)", () => {

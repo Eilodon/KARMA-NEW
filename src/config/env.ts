@@ -133,6 +133,9 @@ const EnvSchema = z.object({
   // Required for CasperX402Plugin to actually build/verify a payload; unset ⇒ payWithEnvelope
   // throws at call time (registration itself only needs the facilitator URL above).
   KARMA_X402_CASPER_SETTLEMENT_TOKEN: z.string().optional(),
+  // X Layer (OKX.AI Genesis Hackathon) — OKX Payment SDK / @x402/evm facilitator. Same
+  // opt-in-per-env-var pattern as Stellar/Casper above.
+  KARMA_X402_XLAYER_FACILITATOR_URL: z.string().url().optional(),
 });
 
 const DEV_ENCRYPTION_KEYS = new Set([
