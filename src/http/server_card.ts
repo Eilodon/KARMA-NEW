@@ -1,4 +1,5 @@
 import { ENV } from "../config/env.js";
+import { MCP_TASKS_CANCEL_METHOD, MCP_TASKS_GET_METHOD, MCP_TASKS_UPDATE_METHOD } from "../mcp/adapter/task_runtime.js";
 import type { ToolDefinition } from "../mcp/adapter/tool_registry.js";
 
 function toolCard(tool: ToolDefinition) {
@@ -34,7 +35,7 @@ export function createServerCard(tools: ToolDefinition[], version: string) {
     },
     extensions: {
       "io.modelcontextprotocol/tasks": {
-        methods: ["tasks/get", "tasks/update", "tasks/cancel"],
+        methods: [MCP_TASKS_GET_METHOD, MCP_TASKS_UPDATE_METHOD, MCP_TASKS_CANCEL_METHOD],
         list: false,
         pollIntervalMs: ENV.MCP_TASK_POLL_INTERVAL_MS,
         ttlMs: ENV.MCP_IDEMPOTENCY_RESULT_TTL_SECONDS * 1000,

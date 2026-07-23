@@ -1,0 +1,5 @@
+[[contracts]]
+fqn = "karma_odra::agent_skill_registry::AgentSkillRegistry"
+
+[[contracts]]
+fqn = "karma_odra::x402_settlement_token::X402SettlementToken"

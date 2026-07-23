@@ -33,7 +33,7 @@ describe("MCP server card", () => {
     // P2-C: protocol mode must be advertised in the server card
     expect(card.protocol.protocolMode).toBe("rc2026");
     expect(card.protocol.discoverMethod).toBe("server/discover");
-    expect(card.extensions["io.modelcontextprotocol/tasks"].methods).toEqual(["tasks/get", "tasks/update", "tasks/cancel"]);
+    expect(card.extensions["io.modelcontextprotocol/tasks"].methods).toEqual(["io.karma/tasks/get", "io.karma/tasks/update", "io.karma/tasks/cancel"]);
     expect(card.tools.some((entry: any) => entry.name === "check_task_status")).toBe(false);
     // MISS-4/I-4.3: the server card must NOT leak reconnaissance signals. pluginTrustBoundary,
     // pluginIsolationMode, patternDebt, safeMode, etc. were deliberately removed (server_card.ts);

@@ -144,7 +144,7 @@ export async function fetchAndAttest(
     };
     const req = httpsRequest(reqOpts, (res) => {
       const chunks: Buffer[] = [];
-      res.on("data", (c) => chunks.push(Buffer.from(c)));
+      res.on("data", (c: Buffer) => chunks.push(c));
       res.on("end", () => {
         const body = Buffer.concat(chunks).toString("utf8");
         const bodySha256 = createHash("sha256").update(body).digest("hex");

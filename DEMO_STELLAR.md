@@ -1,7 +1,7 @@
 # KARMA — Stellar ZK + x402 fast-lane demo
 
-> Stellar Hacks: Real-World ZK hackathon submission, T8 deliverable of plan
-> [`docs/superskills/plans/2026-06-23-stellar-casper-tracks.md`](docs/superskills/plans/2026-06-23-stellar-casper-tracks.md).
+> Stellar Hacks: Real-World ZK hackathon submission, T8 deliverable of the internal
+> stellar-casper-tracks build plan.
 
 This document is what a judge or reproducer should follow to see KARMA's
 "trustless fast-lane" working end-to-end on Stellar Testnet: a ZK credential
@@ -20,8 +20,7 @@ output — regenerate it yourself with `docs/media/record-stellar-evidence.sh`.
 "one HTTP request" x402 + ZK flow running for real with a synced voiceover:
 [`docs/media/stellar-zk-demo.mp4`](docs/media/stellar-zk-demo.mp4)
 (regenerate: `docs/media/record-stellar-demo-video.sh` — narration via Edge
-TTS, no API key needed). BUIDL page draft:
-[`docs/DORAHACKS_BUIDL.md`](docs/DORAHACKS_BUIDL.md).
+TTS, no API key needed).
 
 ## What this submission does (architecture)
 

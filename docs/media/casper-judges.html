@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KARMA on Casper — judge walkthrough</title>
+<style>
+  :root{
+    --bg:#0d0f12; --surface:#15181c; --surface-2:#1b1f24;
+    --ink:#eef0f2; --ink-soft:#9aa3ac; --ink-faint:#5f6870;
+    --accent:#ef4d3d; --accent-soft:#3a1c17; --accent-ink:#fff0ee;
+    --good:#34c77b; --good-soft:#123420;
+    --pending:#f0b429; --pending-soft:#3a2c0d;
+    --border:#262b31; --code-bg:#0a0c0e;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 32px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:860px;margin:0 auto;padding:64px 24px 100px;}
+  a{color:var(--accent);}
+
+  .eyebrow{
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    font-size:12.5px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--ink-faint); margin:0 0 14px;
+  }
+  h1{
+    font-size:clamp(32px,5vw,46px); font-weight:800; letter-spacing:-.01em;
+    line-height:1.08; margin:0 0 20px; text-wrap:balance;
+  }
+  h1 .hl{color:var(--accent);}
+  .lede{font-size:18px; color:var(--ink-soft); max-width:60ch; margin:0 0 36px;}
+
+  .stamp-row{display:flex; flex-wrap:wrap; gap:10px; margin:0 0 48px;}
+  .stamp{
+    display:inline-flex; align-items:center; gap:7px;
+    font-family:ui-monospace,monospace; font-size:12.5px; font-weight:600;
+    padding:7px 13px; border-radius:100px; border:1px solid var(--border);
+    background:var(--surface); color:var(--ink-soft);
+  }
+  .stamp.good{border-color:transparent; background:var(--good-soft); color:var(--good);}
+  .stamp .dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+
+  h2{
+    font-size:24px; font-weight:800; margin:0 0 6px; letter-spacing:-.005em;
+  }
+  .section{margin:0 0 56px;}
+  .section > p.deck{color:var(--ink-soft); font-size:15.5px; max-width:64ch; margin:0 0 26px;}
+
+  .archetype{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px;
+  }
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:20px 22px; box-shadow:var(--shadow);
+  }
+  .card .num{font-family:ui-monospace,monospace; color:var(--accent); font-size:13px; font-weight:700;}
+  .card h3{font-size:15.5px; margin:10px 0 6px;}
+  .card p{margin:0; font-size:13.8px; color:var(--ink-soft);}
+
+  .flow{
+    display:flex; flex-wrap:wrap; align-items:stretch; gap:0;
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:26px; box-shadow:var(--shadow);
+  }
+  .flow-step{flex:1 1 150px; padding:10px 14px; text-align:center;}
+  .flow-step .k{
+    font-family:ui-monospace,monospace; font-size:11px; color:var(--ink-faint);
+    text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;
+  }
+  .flow-step .v{font-size:14px; font-weight:600;}
+  .flow-step .sub{font-size:12.5px; color:var(--ink-soft); margin-top:4px;}
+  .flow-arrow{
+    display:flex; align-items:center; justify-content:center; color:var(--ink-faint);
+    font-size:20px; flex:0 0 auto; padding:0 4px;
+  }
+  @media (max-width:640px){ .flow-arrow{ transform:rotate(90deg); } }
+
+  table.status{width:100%; min-width:560px; border-collapse:collapse; font-size:14px;}
+  .twrap{border:1px solid var(--border); border-radius:12px; overflow-x:auto; box-shadow:var(--shadow);}
+  table.status th{
+    text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-faint); font-weight:600; padding:12px 16px; background:var(--surface-2);
+    border-bottom:1px solid var(--border); white-space:nowrap;
+  }
+  table.status td{padding:13px 16px; border-bottom:1px solid var(--border); background:var(--surface); vertical-align:top;}
+  table.status tr:last-child td{border-bottom:none;}
+  table.status td:first-child{white-space:nowrap;}
+  @media (max-width:640px){
+    table.status{min-width:0;}
+    table.status thead{display:none;}
+    table.status, table.status tbody, table.status tr, table.status td{display:block; width:100%;}
+    table.status tr{border-bottom:1px solid var(--border); padding:14px 16px;}
+    table.status tr:last-child{border-bottom:none;}
+    table.status td{padding:3px 0; border-bottom:none;}
+    table.status td:first-child{font-weight:700; white-space:normal;}
+  }
+  .pill{
+    display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:700;
+    padding:3px 10px; border-radius:100px; white-space:nowrap;
+  }
+  .pill.real{background:var(--good-soft); color:var(--good);}
+  .pill.pending{background:var(--pending-soft); color:var(--pending);}
+  code{font-family:ui-monospace,monospace; font-size:.92em; background:var(--surface-2); padding:.1em .4em; border-radius:4px;}
+
+  .term{
+    background:var(--code-bg); border:1px solid var(--border); border-radius:12px;
+    box-shadow:var(--shadow); overflow:hidden; margin:0 0 18px;
+  }
+  .term .bar{display:flex; gap:6px; padding:11px 14px; background:var(--surface-2); border-bottom:1px solid var(--border);}
+  .term .bar span{width:10px;height:10px;border-radius:50%;background:#3d434a;}
+  .term pre{
+    margin:0; padding:18px 20px; font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    font-size:12.6px; line-height:1.65; color:#c9d1d9; overflow-x:auto; white-space:pre;
+  }
+  .term .ok{color:var(--good);}
+  .term .muted{color:var(--ink-faint);}
+  .cap{font-size:12.5px; color:var(--ink-faint); margin:0 0 26px;}
+
+  .cta-row{display:flex; flex-wrap:wrap; gap:12px; margin-top:8px;}
+  .cta{
+    display:inline-flex; align-items:center; gap:8px; font-size:14px; font-weight:600;
+    padding:11px 18px; border-radius:9px; border:1px solid var(--border); color:var(--ink);
+    text-decoration:none; background:var(--surface);
+  }
+  .cta.primary{background:var(--accent); border-color:var(--accent); color:#1a0805;}
+
+  footer{margin-top:70px; padding-top:22px; border-top:1px solid var(--border); color:var(--ink-faint); font-size:12.5px;}
+
+  /* ---- plain-language front door ---- */
+  .plainhero{
+    background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding:30px 32px 26px; margin:0 0 56px; box-shadow:var(--shadow);
+  }
+  .plainhero .tag{
+    font-family:ui-monospace,monospace; font-size:11px; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--accent); margin:0 0 12px; font-weight:700;
+  }
+  .plainhero p.big{
+    font-size:18.5px; line-height:1.55; color:var(--ink); margin:0 0 26px; max-width:68ch;
+  }
+  .plainhero p.big b{color:var(--accent-ink); background:var(--accent-soft); padding:.05em .3em; border-radius:4px; font-weight:700;}
+
+  .inst-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin:0 0 26px;}
+  .inst-card{
+    display:flex; gap:13px; align-items:flex-start;
+    background:var(--surface-2); border:1px solid var(--border); border-radius:11px; padding:15px 16px;
+  }
+  .inst-card .ico{flex:0 0 auto; color:var(--accent); margin-top:1px;}
+  .inst-card h4{margin:0 0 4px; font-size:14px; font-weight:800; color:var(--ink);}
+  .inst-card p{margin:0; font-size:13px; color:var(--ink-soft); line-height:1.45;}
+  .inst-card .tech{display:inline-block; margin-top:7px; font-family:ui-monospace,monospace; font-size:10.5px; color:var(--ink-faint);}
+
+  .why-list{list-style:none; margin:0; padding:0; display:grid; gap:11px;}
+  .why-list li{display:flex; gap:11px; font-size:14.5px; color:var(--ink-soft); align-items:baseline; line-height:1.5;}
+  .why-list li b{color:var(--ink);}
+  .why-list .n{
+    flex:0 0 auto; width:20px; height:20px; border-radius:50%; background:var(--accent-soft); color:var(--accent);
+    font-family:ui-monospace,monospace; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;
+    margin-top:2px;
+  }
+
+  details.glossary{ margin-top:24px; border-top:1px solid var(--border); padding-top:16px; }
+  details.glossary summary{
+    cursor:pointer; font-size:13px; color:var(--ink-soft); font-weight:700; list-style:none;
+    display:flex; align-items:center; gap:7px; -webkit-tap-highlight-color:transparent;
+  }
+  details.glossary summary::-webkit-details-marker{display:none;}
+  details.glossary summary::before{content:"▸"; color:var(--accent); display:inline-block; transition:transform .15s;}
+  details.glossary[open] summary::before{transform:rotate(90deg);}
+  .gloss-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px 26px; margin:14px 0 0; padding:0;}
+  .gloss-grid dt{font-family:ui-monospace,monospace; font-size:12.5px; color:var(--accent); font-weight:700;}
+  .gloss-grid dd{margin:2px 0 0; font-size:12.8px; color:var(--ink-soft); line-height:1.4;}
+
+  .plain-lead{color:var(--ink); font-weight:600;}
+
+  /* ---- simple map diagram ---- */
+  .map{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:26px 22px 16px; margin:0 0 18px; box-shadow:var(--shadow);
+  }
+  .map svg{width:100%; height:auto; display:block;}
+  .map text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+  .map .map-mobile{display:none;}
+  @media (max-width:640px){
+    .map .map-desktop{display:none;}
+    .map .map-mobile{display:block;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">KARMA · Casper Agentic Buildathon</p>
+  <h1>An RWA price oracle that <span class="hl">pays and gets paid</span><br/>without a human in the loop.</h1>
+  <p class="lede">
+    An agent discovers a real-world-asset price feed, pays for it over a signed x402 envelope,
+    and settles the job on a Casper smart contract — the trust comes from Odra escrow + cryptography,
+    not a server anyone has to trust.
+  </p>
+
+  <div class="stamp-row">
+    <span class="stamp good"><span class="dot"></span>131/131 Odra contract tests passing (incl. property-based invariants)</span>
+    <span class="stamp good"><span class="dot"></span>Real ECDSA/SHA-256 payment verification</span>
+    <span class="stamp good"><span class="dot"></span>Casper-native secp256k1 keystore</span>
+    <span class="stamp good"><span class="dot"></span>Real ~538KB compiled wasm, verified</span>
+    <span class="stamp good"><span class="dot"></span>Deployed + verified end-to-end on Testnet</span>
+    <span class="stamp good"><span class="dot"></span>Real dispute ruled live — reputation slashed 50→40</span>
+    <span class="stamp good"><span class="dot"></span>A real LLM reasons over the safety-checked candidates, not just a formula</span>
+  </div>
+
+  <div class="plainhero">
+    <p class="tag">Start here if you're not a blockchain person</p>
+    <p class="big">
+      Two pieces of software just did a <b>ten‑cent business deal</b> with each other — no bank,
+      no lawyer, no human clicking "approve." One asked for a Bitcoin price, paid for it instantly,
+      and got it. Later, a seller shipped a bad result on purpose to test the system — and a
+      neutral <b>on‑chain judge</b> caught it and fined the seller automatically. Every step below
+      really happened on Casper's public test network; every number and transaction link is
+      checkable by anyone, including you, right now.
+    </p>
+
+    <div class="inst-grid">
+      <div class="inst-card">
+        <svg class="ico" viewBox="0 0 48 48" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="6" width="30" height="37" rx="3"/>
+          <rect x="14" y="13" width="9" height="9" rx="1.5"/>
+          <rect x="25" y="13" width="9" height="9" rx="1.5"/>
+          <circle cx="30" cy="28" r="2"/>
+          <rect x="13.5" y="34" width="11" height="6" rx="1.5"/>
+        </svg>
+        <div>
+          <h4>A vending machine — for data</h4>
+          <p>The buyer's software sees a price, pays it instantly, and gets its answer back. No account, no invoice, no human approving a purchase order.</p>
+          <span class="tech">→ x402 pay‑per‑call</span>
+        </div>
+      </div>
+      <div class="inst-card">
+        <svg class="ico" viewBox="0 0 48 48" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="11" y="21" width="26" height="19" rx="3.5"/>
+          <path d="M17 21v-6a7 7 0 0 1 14 0v6"/>
+          <circle cx="24" cy="30" r="2.4" fill="currentColor" stroke="none"/>
+        </svg>
+        <div>
+          <h4>A bank that holds the money</h4>
+          <p>Payment sits locked in the contract until the buyer confirms delivery — the seller can't just take it and vanish.</p>
+          <span class="tech">→ Odra escrow</span>
+        </div>
+      </div>
+      <div class="inst-card">
+        <svg class="ico" viewBox="0 0 48 48" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="24" y1="6" x2="24" y2="40"/>
+          <line x1="15" y1="41" x2="33" y2="41"/>
+          <line x1="10" y1="14" x2="38" y2="14"/>
+          <line x1="11" y1="14" x2="7" y2="27"/>
+          <line x1="37" y1="14" x2="41" y2="27"/>
+          <circle cx="7" cy="30" r="3.4"/>
+          <circle cx="41" cy="30" r="3.4"/>
+        </svg>
+        <div>
+          <h4>A courtroom, on‑chain</h4>
+          <p>If the buyer says "that's wrong," a neutral third account rules on it — and the loser's reputation and deposit really do take the hit.</p>
+          <span class="tech">→ dispute + arbitration</span>
+        </div>
+      </div>
+      <div class="inst-card">
+        <svg class="ico" viewBox="0 0 48 48" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5" y="12" width="38" height="25" rx="3.5"/>
+          <circle cx="16" cy="24.5" r="5.2"/>
+          <line x1="27" y1="19" x2="37" y2="19"/>
+          <line x1="27" y1="25" x2="37" y2="25"/>
+          <line x1="27" y1="31" x2="33" y2="31"/>
+        </svg>
+        <div>
+          <h4>A credit score — for software</h4>
+          <p>Every finished job, or every lost dispute, moves a public score — so other agents know who's reliable before they ever pay.</p>
+          <span class="tech">→ on‑chain reputation</span>
+        </div>
+      </div>
+    </div>
+
+    <ul class="why-list">
+      <li><span class="n">1</span><span><b>Software can now pay software</b>, per request, in seconds — no invoice, no API key, no human in the approval chain.</span></li>
+      <li><span class="n">2</span><span><b>Getting cheated isn't just "hope it doesn't happen"</b> — there's a real judge, and losing a dispute has a real cost.</span></li>
+      <li><span class="n">3</span><span><b>Nothing here is a mockup</b> — every hash, score, and verdict below came from a real run against Casper Testnet, and you can reproduce it yourself.</span></li>
+    </ul>
+
+    <details class="glossary">
+      <summary>The handful of technical words this page uses, in one sentence each</summary>
+      <dl class="gloss-grid">
+        <dt>x402</dt><dd>An HTTP standard for "pay before you get the response" — an agent sees a price tag, pays, then gets its data.</dd>
+        <dt>Escrow</dt><dd>Money held by the contract itself, not the seller, until the buyer confirms delivery.</dd>
+        <dt>Arbiter</dt><dd>A neutral on‑chain account that rules on a dispute — never the buyer or the seller.</dd>
+        <dt>Reputation</dt><dd>A running score on the contract: up for completed jobs, down for lost disputes.</dd>
+        <dt>MCP</dt><dd>Model Context Protocol — the standard AI agents use to discover and call tools like KARMA's.</dd>
+        <dt>Odra / ECDSA / secp256k1</dt><dd>Casper's smart‑contract framework, and the cryptography that proves a payment was really signed by its owner.</dd>
+      </dl>
+    </details>
+  </div>
+
+  <div class="map">
+    <svg class="map-desktop" viewBox="0 0 760 300" role="img" aria-label="Buyer pays into escrow; escrow releases to seller on confirmation; a dispute routes to a neutral arbiter.">
+      <defs>
+        <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" style="fill:var(--accent)"/>
+        </marker>
+        <marker id="arrow-good" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" style="fill:var(--good)"/>
+        </marker>
+        <marker id="arrow-pending" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" style="fill:var(--pending)"/>
+        </marker>
+      </defs>
+      <rect x="24" y="104" width="150" height="72" rx="12" style="fill:var(--surface-2);stroke:var(--border);stroke-width:1.5"/>
+      <text x="99" y="136" text-anchor="middle" style="fill:var(--ink);font-size:15px;font-weight:700">Buyer agent</text>
+      <text x="99" y="156" text-anchor="middle" style="fill:var(--ink-soft);font-size:11.5px">wants a price feed</text>
+
+      <rect x="305" y="68" width="170" height="124" rx="14" style="fill:var(--surface-2);stroke:var(--accent);stroke-width:2"/>
+      <text x="390" y="120" text-anchor="middle" style="fill:var(--ink);font-size:15px;font-weight:700">Casper contract</text>
+      <text x="390" y="140" text-anchor="middle" style="fill:var(--ink-soft);font-size:11.5px">holds the payment</text>
+      <text x="390" y="158" text-anchor="middle" style="fill:var(--ink-soft);font-size:11.5px">until delivery is confirmed</text>
+
+      <rect x="586" y="104" width="150" height="72" rx="12" style="fill:var(--surface-2);stroke:var(--border);stroke-width:1.5"/>
+      <text x="661" y="136" text-anchor="middle" style="fill:var(--ink);font-size:15px;font-weight:700">Seller agent</text>
+      <text x="661" y="156" text-anchor="middle" style="fill:var(--ink-soft);font-size:11.5px">delivers the data</text>
+
+      <line x1="176" y1="122" x2="300" y2="105" style="stroke:var(--accent);stroke-width:2" marker-end="url(#arrow)"/>
+      <text x="238" y="98" text-anchor="middle" style="fill:var(--accent);font-size:11.5px;font-weight:700">① pays (x402)</text>
+
+      <line x1="480" y1="150" x2="584" y2="150" style="stroke:var(--good);stroke-width:2" marker-end="url(#arrow-good)"/>
+      <text x="532" y="142" text-anchor="middle" style="fill:var(--good);font-size:11.5px;font-weight:700">② releases when confirmed</text>
+
+      <line x1="390" y1="192" x2="390" y2="228" style="stroke:var(--pending);stroke-width:2;stroke-dasharray:4 4" marker-end="url(#arrow-pending)"/>
+      <rect x="330" y="230" width="120" height="50" rx="10" style="fill:var(--surface-2);stroke:var(--pending);stroke-width:1.5;stroke-dasharray:4 3"/>
+      <text x="390" y="252" text-anchor="middle" style="fill:var(--ink);font-size:13px;font-weight:700">Neutral arbiter</text>
+      <text x="390" y="268" text-anchor="middle" style="fill:var(--ink-soft);font-size:10.5px">only if the buyer disputes</text>
+    </svg>
+
+    <svg class="map-mobile" viewBox="0 0 340 560" role="img" aria-label="Buyer pays into escrow; escrow releases to seller on confirmation; a dispute routes to a neutral arbiter.">
+      <defs>
+        <marker id="marrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" style="fill:var(--accent)"/>
+        </marker>
+        <marker id="marrow-good" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" style="fill:var(--good)"/>
+        </marker>
+        <marker id="marrow-pending" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" style="fill:var(--pending)"/>
+        </marker>
+      </defs>
+      <rect x="70" y="16" width="200" height="62" rx="12" style="fill:var(--surface-2);stroke:var(--border);stroke-width:1.5"/>
+      <text x="170" y="44" text-anchor="middle" style="fill:var(--ink);font-size:16px;font-weight:700">Buyer agent</text>
+      <text x="170" y="64" text-anchor="middle" style="fill:var(--ink-soft);font-size:12.5px">wants a price feed</text>
+
+      <line x1="170" y1="82" x2="170" y2="126" style="stroke:var(--accent);stroke-width:2.5" marker-end="url(#marrow)"/>
+      <text x="184" y="108" style="fill:var(--accent);font-size:12.5px;font-weight:700">① pays (x402)</text>
+
+      <rect x="40" y="132" width="260" height="112" rx="14" style="fill:var(--surface-2);stroke:var(--accent);stroke-width:2"/>
+      <text x="170" y="172" text-anchor="middle" style="fill:var(--ink);font-size:16px;font-weight:700">Casper contract</text>
+      <text x="170" y="194" text-anchor="middle" style="fill:var(--ink-soft);font-size:12.5px">holds the payment until</text>
+      <text x="170" y="212" text-anchor="middle" style="fill:var(--ink-soft);font-size:12.5px">delivery is confirmed</text>
+
+      <line x1="170" y1="248" x2="170" y2="296" style="stroke:var(--good);stroke-width:2.5" marker-end="url(#marrow-good)"/>
+      <text x="184" y="276" style="fill:var(--good);font-size:12px;font-weight:700">② releases when confirmed</text>
+
+      <rect x="70" y="302" width="200" height="62" rx="12" style="fill:var(--surface-2);stroke:var(--border);stroke-width:1.5"/>
+      <text x="170" y="330" text-anchor="middle" style="fill:var(--ink);font-size:16px;font-weight:700">Seller agent</text>
+      <text x="170" y="350" text-anchor="middle" style="fill:var(--ink-soft);font-size:12.5px">delivers the data</text>
+
+      <polyline points="300,190 322,190 322,460 272,460" style="fill:none;stroke:var(--pending);stroke-width:2;stroke-dasharray:4 4" marker-end="url(#marrow-pending)"/>
+      <text x="326" y="330" style="fill:var(--pending);font-size:11.5px;font-weight:700" transform="rotate(90 326 330)">if disputed</text>
+
+      <rect x="110" y="432" width="160" height="58" rx="10" style="fill:var(--surface-2);stroke:var(--pending);stroke-width:1.5;stroke-dasharray:4 3"/>
+      <text x="190" y="456" text-anchor="middle" style="fill:var(--ink);font-size:13.5px;font-weight:700">Neutral arbiter</text>
+      <text x="190" y="474" text-anchor="middle" style="fill:var(--ink-soft);font-size:11px">only if the buyer disputes</text>
+    </svg>
+  </div>
+
+  <div class="section">
+    <h2>Where this sits</h2>
+    <p class="deck"><span class="plain-lead">In one sentence: a vending machine for real‑world data, with an ID check built in.</span> One of the buildathon's four reference shapes — a price-feed agent that proves who it is before it gets paid.</p>
+    <div class="archetype">
+      <div class="card"><span class="num">01</span><h3>RWA oracle</h3><p><code>rwa_price_oracle</code> — a signed BTC/ETH/gold feed, priced per call, discoverable by any agent through KARMA-MCP.</p></div>
+      <div class="card"><span class="num">02</span><h3>Verified identity</h3><p><code>identity_policy</code> is a real field on the Odra contract — a skill can require a fresh, verified caller before it will run.</p></div>
+      <div class="card"><span class="num">03</span><h3>Escrow, not trust</h3><p>Payment sits in the Odra registry's pull-payment ledger until the buyer confirms — never a bare promise.</p></div>
+      <div class="card"><span class="num">04</span><h3>Agent decides</h3><p>The autonomous loop picks the highest expected-profit skill under a hard budget cap and invokes it itself — no human clicks "buy".</p></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>The loop, end to end</h2>
+    <p class="deck"><span class="plain-lead">In one sentence: ask → pay → check the signature → lock the money away.</span> Every box below is real code that actually ran to produce this page — not a mockup.</p>
+    <div class="flow">
+      <div class="flow-step"><div class="k">1 · discover</div><div class="v">KARMA-MCP</div><div class="sub">finds <code>rwa_price_oracle</code></div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><div class="k">2 · pay</div><div class="v">x402 envelope</div><div class="sub">secp256k1-signed, off-chain</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><div class="k">3 · verify</div><div class="v">ECDSA / SHA-256</div><div class="sub">provider checks it, live</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><div class="k">4 · settle</div><div class="v">Odra registry</div><div class="sub"><code>create_job</code> escrow on Casper</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>See it run</h2>
+    <p class="deck"><span class="plain-lead">In one sentence: this is the actual computer conversation, copy‑pasted, not a screenshot someone typed up.</span> Captured verbatim from this repo — <code>pnpm exec tsx src/scripts/demo_casper_x402_live.ts</code>. A real local HTTP server issues a real 402, a real signature gets verified, nothing is printed by hand.</p>
+    <div class="term">
+      <div class="bar"><span></span><span></span><span></span></div>
+      <pre>$ pnpm exec tsx src/scripts/demo_casper_x402_live.ts
+[demo] provider stub listening on http://localhost:8934/invoke
+[client] step 1: probe /invoke (no payment)
+┌── Step 1 — 402 Payment Required (real HTTP) ──┐
+│ accepts[0].amount = 10000000 motes             │
+│ accepts[0].payTo  = account-hash-c863d5...6234 │
+└─────────────────────────────────────────────────┘
+[client] step 2: sign a real x402 payment envelope (secp256k1/SHA-256/DER)...
+[client] step 3: POST /invoke with X-Payment — one request, real signature verified server-side
+[provider] X-Payment received, verifying (real ECDSA/SHA-256, no facilitator round-trip)...
+<span class="ok">[provider] verified OK</span> — payer: account-hash-4372145f...2ffd9
+[provider] price feed: BTC/USD = $63076.00 (source: coingecko)
+┌── Step 3 — provider response ──┐
+│ status = 200                    │
+│ feed = {"feed":"BTC/USD","price":"63076.00",...} │
+└──────────────────────────────────┘
+<span class="ok">[demo] HTTP + crypto loop PASS</span> <span class="muted">(offline — re-run --live once a funded key submits the on-chain leg)</span></pre>
+    </div>
+    <div class="term">
+      <div class="bar"><span></span><span></span><span></span></div>
+      <pre>$ cargo +nightly test --manifest-path contracts-odra/Cargo.toml
+...
+<span class="ok">test result: ok. 131 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out</span></pre>
+    </div>
+    <p class="cap">Reproduce both yourself — no funded wallet needed for either command above. The price above
+      is a live CoinGecko quote, not a fixed stub — it'll differ every run. There's also a real
+      <a href="casper-x402-demo.svg">animated terminal-cast recording</a> of this exact run, captured with
+      asciinema — same content as the transcript above, played back frame-by-frame.</p>
+  </div>
+
+  <div class="section">
+    <h2>The courtroom, run for real</h2>
+    <p class="deck"><span class="plain-lead">In one sentence: a real "I didn't get what I paid for" fight, settled by a real judge, with a real penalty.</span> Every agent economy needs a way to settle this — most demos skip it.
+      KARMA's arbiter is itself an on-chain role, distinct from both sides of the deal. This ran live on Testnet
+      on 2026-07-07, real transactions, real verdict:</p>
+    <div class="flow">
+      <div class="flow-step"><div class="k">1 · deliver</div><div class="v">provider</div><div class="sub">submits a result</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><div class="k">2 · dispute</div><div class="v">requester</div><div class="sub">posts a bond, contests it</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><div class="k">3 · respond</div><div class="v">provider</div><div class="sub">matches the bond</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><div class="k">4 · arbitrate</div><div class="v">neutral arbiter</div><div class="sub">a 3rd on-chain account rules</div></div>
+    </div>
+    <p class="cap">Verdict: <code>ProviderAtFault</code>. Result, read straight off the contract afterward — not
+      asserted, read: escrow + both bonds returned to the requester (<code>getJob().status == "Refunded"</code>),
+      and the provider's skill reputation actually dropped <strong>50 → 40</strong>. Full tx-by-tx trail —
+      including two real mistakes hit live along the way (an underfunded throwaway key, a duplicate task hash,
+      both caught by the contract's own error codes) — in <a href="https://github.com/Eilodon/KARMA-Eilodon/blob/main/DEMO_CASPER.md#courtroom-dispute--arbitrate--done-live-2026-07-07">DEMO_CASPER.md</a>.</p>
+  </div>
+
+  <div class="section">
+    <h2>The agent actually thinks</h2>
+    <p class="deck"><span class="plain-lead">In one sentence: instead of a fixed formula picking the cheapest good deal, a real Claude call weighs the risk and says why in plain English.</span>
+      The loop's formula alone is real and tested — but it can't explain a choice, or notice
+      "the highest‑paying option here is also from a brand‑new, unproven seller." An LLM sitting
+      on top of the exact same safety checks can. It never gets to touch the money limits — it only
+      gets to choose <em>among</em> whatever those limits already allowed through.</p>
+    <div class="flow">
+      <div class="flow-step"><div class="k">1 · safety filter</div><div class="v">unchanged code</div><div class="sub">budget / per‑tx / per‑hour caps</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><div class="k">2 · LLM reasons</div><div class="v">real Claude call</div><div class="sub">weighs price vs. reputation, in words</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><div class="k">3 · verified</div><div class="v">code checks the pick</div><div class="sub">hallucinated pick? falls back safely</div></div>
+    </div>
+    <p class="cap" style="margin-top:18px">Run it yourself — <code>pnpm demo:llm-agent</code> (offline, shows the deterministic pick) or
+      <code>ANTHROPIC_API_KEY=sk-ant-… pnpm demo:llm-agent</code> (a real Claude call). Captured verbatim below —
+      three skills, same price tier, one of them the highest‑paying <em>and</em> the least proven:</p>
+    <div class="term">
+      <div class="bar"><span></span><span></span><span></span></div>
+      <pre>$ pnpm exec tsx src/scripts/demo_llm_agent_reasoning.ts
+[market] 3 skills discovered, 3 cleared the hard safety caps:
+  - rwa_price_oracle         price=$0.010  profit=$0.008  reputation=88
+  - unaudited_yield_signal   price=$0.010  profit=$0.016  reputation=12
+  - doc_summary              price=$0.005  profit=$0.004  reputation=91
+
+┌── Deterministic pick (decide(), unchanged formula) ──┐
+│ chosen  = unaudited_yield_signal                      │
+│ reason  = expected_profit=160000                      │
+│ rationale = none — a formula does not explain itself  │
+└────────────────────────────────────────────────────────┘
+
+<span class="muted">[llm] ANTHROPIC_API_KEY is not set — skipping the live reasoning call.
+      Re-run with:  ANTHROPIC_API_KEY=sk-ant-... pnpm demo:llm-agent
+      to see an actual Claude call choose among the same candidates and explain why.</span>
+<span class="ok">[demo] deterministic leg PASS (offline)</span></pre>
+    </div>
+    <p class="cap">The formula alone chases the highest number and walks straight into the least‑proven
+      seller — exactly the blind spot a reasoning layer exists to catch. With a key set, this same
+      run prints the LLM's actual sentence-by-sentence reasoning and flags whether it agreed with
+      the formula or overruled it. Full write‑up, safety argument, and the fallback‑on‑hallucination
+      test coverage: <a href="https://github.com/Eilodon/KARMA-Eilodon/blob/main/DEMO_CASPER.md#agent-reasoning--a-real-llm-inside-the-loop-not-just-deterministic-code">DEMO_CASPER.md</a>.</p>
+  </div>
+
+  <div class="section">
+    <h2>What's real today, what's the last step</h2>
+    <p class="deck"><span class="plain-lead">In one sentence: here's the honest scoreboard — what's proven, and what's the very last remaining step.</span> Said plainly, on purpose — a claim we can't back up is worse than no claim.</p>
+    <div class="twrap">
+      <table class="status">
+        <tr><th>Layer</th><th>Status</th><th>Detail</th></tr>
+        <tr><td>Odra <code>AgentSkillRegistry</code> logic</td><td><span class="pill real">real</span></td><td>1659 LoC, 131 tests: escrow, dispute, evaluator, identity gate, Sybil bond, governance, rationale attestation, x402 settlement token, plus 2 property-based invariant tests (escrow conservation, reputation bounds).</td></tr>
+        <tr><td>x402 payment envelope</td><td><span class="pill real">real</span></td><td>secp256k1/SHA-256/DER signed and independently re-verified — not a structural stub.</td></tr>
+        <tr><td>HTTP 402 → pay → verify loop</td><td><span class="pill real">real</span></td><td>Runs against a live local server, shown above verbatim.</td></tr>
+        <tr><td>Casper keystore</td><td><span class="pill real">real</span></td><td>Same secp256k1 key already signing Ethereum/Stellar — one backup, three chains.</td></tr>
+        <tr><td>MCP tool surface</td><td><span class="pill real">real</span></td><td>41 tools (<code>casper_register_skill</code>, <code>casper_create_job</code>, <code>casper_get_account_state</code>, <code>casper_get_skill</code>/<code>casper_get_job</code>, <code>casper_claim_refund</code>, composition, evaluator/dispute/arbitration, cross-chain-rep governance, <code>casper_get_governance_state</code>, owner mutators (<code>casper_deactivate_skill</code>/<code>casper_set_min_reputation</code>/<code>casper_set_identity_policy</code>), agent/job/proposal browsing (<code>casper_get_provider_jobs</code>/<code>casper_get_requester_jobs</code>/<code>casper_get_agent_skills</code>/<code>casper_get_dispute_info</code>/<code>casper_get_proposal</code>), …) — any MCP client can drive this directly, not just a terminal script.</td></tr>
+        <tr><td>Compiled contract wasm</td><td><span class="pill real">real</span></td><td>~538,000 bytes, <code>WebAssembly.validate()</code>-clean, all 59 entry points exported — <code>contracts-odra/build-wasm.sh</code>, reproducible today.</td></tr>
+        <tr><td>On-chain deploy + settlement tx</td><td><span class="pill real">real</span></td><td>Deployed at <code>hash-42f6945f…</code> (attestation-hardened redeploy, 2026-07-21, supersedes <code>hash-29b7daeb…</code>), verified end-to-end: deploy, full job lifecycle, courtroom dispute+arbitrate, governance propose/approve/execute, and the new <code>attest_rationale</code>/<code>get_rationale_hash</code> on-chain LLM-decision attestation — 23 real transactions total. The real 2-of-2 multisig + 48h timelock confirmed by directly decoding the contract's own governance storage. See <code>DEMO_CASPER.md</code> for tx-by-tx evidence.</td></tr>
+        <tr><td>Full job lifecycle</td><td><span class="pill real">real</span></td><td>register → bond → escrow → deliver → confirm → withdraw, six real transactions, provider reputation bumped live to 55.</td></tr>
+        <tr><td>Courtroom — dispute + arbitrate</td><td><span class="pill real">real</span></td><td>A real contested delivery, ruled by a neutral on-chain arbiter — <code>ProviderAtFault</code>, reputation slashed 50→40, escrow refunded. Previously unit-tested only; now run live.</td></tr>
+        <tr><td>LLM reasoning layer</td><td><span class="pill real">real</span></td><td>Real Anthropic call chooses among safety-checked candidates and explains why (5/5 tests, fake provider); requires <code>ANTHROPIC_API_KEY</code> to exercise the live network leg — see "The agent actually thinks" above.</td></tr>
+        <tr><td>Cross-chain reputation governance</td><td><span class="pill real">real</span> / <span class="pill pending">pending</span></td><td><code>propose_set_cross_chain_rep</code> + <code>approve_proposal</code> both real and confirmed on-chain, re-run 2026-07-21 against the current attestation-hardened contract (fresh <code>proposal_id=1</code>); <code>execute_proposal</code> correctly reverts <code>TimelockNotElapsed</code> against the real 48h clock — completes ~2026-07-23.</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="cta-row">
+    <a class="cta primary" href="https://github.com/Eilodon/KARMA-Eilodon/blob/main/DEMO_CASPER.md">Full reproduction guide →</a>
+    <a class="cta" href="https://github.com/Eilodon/KARMA-Eilodon/blob/main/README.md">Project README</a>
+    <a class="cta" href="https://github.com/Eilodon/KARMA-Eilodon/blob/main/contracts-odra/README.md">Odra contract source</a>
+  </div>
+
+  <footer>KARMA — a protocol for agent economies. This page is a judge aid; the repository is the submission.</footer>
+</div>
+</body>
+</html>

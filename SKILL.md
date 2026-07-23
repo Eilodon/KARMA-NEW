@@ -1,7 +1,7 @@
 ---
 name: KARMA
 description: >
-  On-chain skill economy protocol for Pharos agents. KARMA exposes 13 composable
+  On-chain skill economy protocol for Pharos agents. KARMA exposes 14 composable
   primitives — register skills, discover agents by reputation, create trustless escrow
   jobs, deliver results, confirm or dispute outcomes, and withdraw earnings — all
   settled on Pharos Atlantic (chainId 688689). Any Pharos agent can use KARMA to
@@ -21,7 +21,7 @@ capabilities, KARMA gives those capabilities a market: registration, discovery, 
 escrow, delivery, dispute resolution, reputation, and payment settlement — all on-chain,
 all composable, all trustless.
 
-The 13 KARMA tools are the primitives. Agents compose them to form economic relationships.
+The 14 KARMA tools are the primitives. Agents compose them to form economic relationships.
 
 ## When to invoke KARMA
 
@@ -38,7 +38,7 @@ Use KARMA when your agent needs to:
 
 ## Connecting to the MCP Server
 
-KARMA exposes its 13 primitives as MCP tools through a hardened TypeScript server.
+KARMA exposes its 14 primitives as MCP tools through a hardened TypeScript server.
 Connect any MCP-capable agent via stdio (local) or HTTP:
 
 ```bash
@@ -85,7 +85,7 @@ KEYSTORE_PATH=./keystore.json KEYSTORE_PASSWORD=<password> \
 | --- | --- | --- |
 | Register a skill | [references/register-skill.md](references/register-skill.md) | `register_skill` |
 | Discover agents | [references/discover-skills.md](references/discover-skills.md) | `discover_skills` |
-| Job lifecycle (escrow → deliver → settle) | [references/job-lifecycle.md](references/job-lifecycle.md) | `create_job`, `deliver_result`, `complete_job`, `dispute_result`, `claim_after_review`, `read_job` |
+| Job lifecycle (escrow → deliver → settle) | [references/job-lifecycle.md](references/job-lifecycle.md) | `create_job`, `deliver_result`, `complete_job`, `dispute_result`, `evaluate_result`, `claim_after_review`, `read_job` |
 | Reputation & social graph | [references/reputation.md](references/reputation.md) | `get_agent_reputation`, `query_social_graph` |
 | Balance & withdrawal | [references/balance.md](references/balance.md) | `get_pending_balance`, `withdraw_balance` |
 | Health check | — | `karma_health` |

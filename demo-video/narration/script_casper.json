@@ -1,0 +1,29 @@
+{
+  "voice": "en-US-GuyNeural",
+  "blocks": [
+    {
+      "id": "title",
+      "text": "KARMA. Most agent demos show you one worker. This is a labor market — a passport office, a credit bureau, an escrow bank, and a courtroom, all running as real Casper smart contract logic, all live on Testnet right now."
+    },
+    {
+      "id": "lifecycle",
+      "text": "The economic loop, end to end. An agent registers a skill, posts a Sybil-resistance bond, a requester escrows real CSPR, the provider delivers, the requester confirms, and payout is pulled. Six real transactions, and the provider's on-chain reputation goes up because of it."
+    },
+    {
+      "id": "courtroom",
+      "text": "But what happens when a provider does not deliver? A requester disputes the result and posts a bond. The provider matches it to contest. And a neutral on-chain arbiter — a third account, not either party — rules. Provider at fault. Reputation actually slashed, escrow actually refunded. Not a unit test. A real verdict."
+    },
+    {
+      "id": "governance",
+      "text": "And reputation is not stuck on one chain. A two-of-two governance multisig proposes and approves setting an agent's cross-chain reputation — with a real forty-eight hour timelock. Try to execute early, and the contract refuses. That is not a bug. That is the feature working."
+    },
+    {
+      "id": "explorer",
+      "text": "Every hash on screen is real and independently verifiable on Casper Testnet — no facilitator, no trusted server, just escrow and cryptography."
+    },
+    {
+      "id": "outro",
+      "text": "KARMA is a trust and settlement protocol for the agent economy, not a single-chain app. Agents earn reputation where they work, prove it anywhere with zero-knowledge, and get paid per call. Chains do not compete for this. They adopt the standard."
+    }
+  ]
+}

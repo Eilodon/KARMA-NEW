@@ -7,9 +7,9 @@
  * Behaviour:
  *
  *   Final branch supports rc2026 only.
- *   Mcp-Method is REQUIRED; absent → -32602.
+ *   Mcp-Method is REQUIRED; absent → -32020 (HeaderMismatch).
  *   Named operations that carry body.params.name (currently tools/call) also
- *   REQUIRE Mcp-Name; absent → -32602.
+ *   REQUIRE Mcp-Name; absent → -32020 (HeaderMismatch).
  *   When Mcp-Method / Mcp-Name are present they must match body.method /
  *   body.params.name.
  *
@@ -35,14 +35,14 @@ function jsonRpcError(code: number, message: string) {
 function singleHeaderValue(raw: string | string[] | undefined, label: string): { value?: string; error?: string } {
   if (raw === undefined) return {};
   if (Array.isArray(raw)) {
-    return { error: `Invalid Params: ${label} header must be single-valued; repeated header values are not allowed.` };
+    return { error: `Header mismatch: ${label} header must be single-valued; repeated header values are not allowed.` };
   }
   if (raw.includes(",")) {
-    return { error: `Invalid Params: ${label} header must be single-valued; comma-joined values are not allowed.` };
+    return { error: `Header mismatch: ${label} header must be single-valued; comma-joined values are not allowed.` };
   }
   const value = raw.trim();
   if (!value) {
-    return { error: `Invalid Params: ${label} header must not be empty.` };
+    return { error: `Header mismatch: ${label} header must not be empty.` };
   }
   return { value };
 }
@@ -58,18 +58,23 @@ function bodyMethod(body: unknown): string | undefined {
   return typeof method === "string" ? method : undefined;
 }
 
-function bodyName(body: unknown): string | undefined {
+// Per the spec's Standard Request Headers table, Mcp-Name mirrors body.params.name for
+// tools/call and prompts/get, but body.params.uri for resources/read (a ReadResourceRequest has
+// no params.name field at all).
+function mcpNameSourceField(method: string | undefined): "name" | "uri" {
+  return method === "resources/read" ? "uri" : "name";
+}
+
+function bodyName(body: unknown, method: string | undefined): string | undefined {
   const params = requestBodyObject(body)?.params;
   if (params === null || typeof params !== "object" || Array.isArray(params)) return undefined;
-  const name = (params as Record<string, unknown>).name;
-  return typeof name === "string" ? name : undefined;
+  const value = (params as Record<string, unknown>)[mcpNameSourceField(method)];
+  return typeof value === "string" ? value : undefined;
 }
 
 function operationRequiresName(method: string | undefined): boolean {
-  // The current MCP operation header carries body.params.name for named tool calls.
-  // Other methods may not have a params.name field, so rc2026 should not require
-  // Mcp-Name for every method blindly.
-  return method === "tools/call";
+  // Per the spec: Mcp-Name is required for tools/call, resources/read, and prompts/get.
+  return method === "tools/call" || method === "resources/read" || method === "prompts/get";
 }
 
 // ── middleware ────────────────────────────────────────────────────────────────
@@ -84,15 +89,15 @@ export function protocolHeaderValidation(
   const mcpMethod = methodHeader.value;
   const mcpName = nameHeader.value;
   const method = bodyMethod(req.body);
-  const name = bodyName(req.body);
+  const name = bodyName(req.body, method);
 
   if (methodHeader.error) {
-    res.status(400).json(jsonRpcError(-32602, methodHeader.error));
+    res.status(400).json(jsonRpcError(-32020, methodHeader.error));
     return;
   }
 
   if (nameHeader.error) {
-    res.status(400).json(jsonRpcError(-32602, nameHeader.error));
+    res.status(400).json(jsonRpcError(-32020, nameHeader.error));
     return;
   }
 
@@ -100,7 +105,7 @@ export function protocolHeaderValidation(
   if (mcpMethod === undefined) {
     res
       .status(400)
-      .json(jsonRpcError(-32602, "Invalid Params: Mcp-Method header is required in rc2026 mode."));
+      .json(jsonRpcError(-32020, "Header mismatch: Mcp-Method header is required in rc2026 mode."));
     return;
   }
 
@@ -108,7 +113,7 @@ export function protocolHeaderValidation(
   if (operationRequiresName(method) && mcpName === undefined) {
     res
       .status(400)
-      .json(jsonRpcError(-32602, "Invalid Params: Mcp-Name header is required for tools/call in rc2026 mode."));
+      .json(jsonRpcError(-32020, `Header mismatch: Mcp-Name header is required for ${method} in rc2026 mode.`));
     return;
   }
 
@@ -121,24 +126,25 @@ export function protocolHeaderValidation(
       .status(400)
       .json(
         jsonRpcError(
-          -32602,
+          -32020,
           method === undefined
-            ? `Invalid Params: Mcp-Method header '${mcpMethod}' cannot be validated because body method is missing or non-string.`
-            : `Invalid Params: Mcp-Method header '${mcpMethod}' does not match body method '${method}'.`,
+            ? `Header mismatch: Mcp-Method header '${mcpMethod}' cannot be validated because body method is missing or non-string.`
+            : `Header mismatch: Mcp-Method header '${mcpMethod}' does not match body method '${method}'.`,
         ),
       );
     return;
   }
 
   if (mcpName !== undefined && mcpName !== name) {
+    const sourceField = mcpNameSourceField(method);
     res
       .status(400)
       .json(
         jsonRpcError(
-          -32602,
+          -32020,
           name === undefined
-            ? `Invalid Params: Mcp-Name header '${mcpName}' cannot be validated because body params.name is missing or non-string.`
-            : `Invalid Params: Mcp-Name header '${mcpName}' does not match body params.name '${name}'.`,
+            ? `Header mismatch: Mcp-Name header '${mcpName}' cannot be validated because body params.${sourceField} is missing or non-string.`
+            : `Header mismatch: Mcp-Name header '${mcpName}' does not match body params.${sourceField} '${name}'.`,
         ),
       );
     return;

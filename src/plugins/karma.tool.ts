@@ -487,11 +487,18 @@ export function createKarmaTools(svc: KarmaService): ToolDefinition[] {
             },
           );
         }
+        // "paid" only once there's a real on-chain txHash — before that, the payment is signed
+        // (a valid authorization exists) but not yet settled/confirmed. See PaymentReceipt.txHash's
+        // own doc comment (src/lib/payment/plugin.ts) for why the two must not be conflated.
+        const x402Status = receipt.txHash ? "paid" : "signed";
         return reply(
-          `[KARMA] create_job x402 settled via ${plugin.id} for skill #${skillId} ` +
-            `(${receipt.amount} ${receipt.asset || "(plugin-default)"} on ${receipt.network})`,
+          `[KARMA] create_job x402 ${x402Status} via ${plugin.id} for skill #${skillId} ` +
+            `(${receipt.amount} ${receipt.asset || "(plugin-default)"} on ${receipt.network})` +
+            (x402Status === "signed"
+              ? " — signature valid, not yet settled on-chain"
+              : ""),
           {
-            status: "paid",
+            status: x402Status,
             skillId,
             settlementRail: "x402",
             pluginId: plugin.id,
@@ -504,6 +511,8 @@ export function createKarmaTools(svc: KarmaService): ToolDefinition[] {
               asset: receipt.asset,
               facilitatorRef: receipt.facilitatorRef,
               txHash: receipt.txHash,
+              signature: receipt.signature,
+              settlementError: receipt.settlementError,
             },
           },
         );

@@ -25,6 +25,10 @@ export interface PaymentBootEnv {
   KARMA_X402_STELLAR_FACILITATOR_URL?: string;
   /** Casper x402 facilitator URL. Falsy/undefined ⇒ CasperX402Plugin not registered. */
   KARMA_X402_CASPER_FACILITATOR_URL?: string;
+  /** `X402SettlementToken` package hash — forwarded to `CasperX402Plugin`'s constructor options.
+   *  Falsy/undefined ⇒ plugin still registers (facilitator URL gates that), but `payWithEnvelope`
+   *  throws at call time until this is set. */
+  KARMA_X402_CASPER_SETTLEMENT_TOKEN?: string;
 }
 
 export interface RegisterConfiguredPaymentPluginsOptions {
@@ -69,7 +73,10 @@ export function registerConfiguredPaymentPlugins(
 
   tryRegister(
     "x402-casper",
-    () => new CasperX402Plugin(env.KARMA_X402_CASPER_FACILITATOR_URL ?? ""),
+    () =>
+      new CasperX402Plugin(env.KARMA_X402_CASPER_FACILITATOR_URL ?? "", undefined, {
+        settlementTokenPackageHash: env.KARMA_X402_CASPER_SETTLEMENT_TOKEN,
+      }),
     env.KARMA_X402_CASPER_FACILITATOR_URL ? null : "KARMA_X402_CASPER_FACILITATOR_URL not set",
   );
 

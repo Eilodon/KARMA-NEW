@@ -55,7 +55,7 @@ On-chain storage:
 |---|---|---|
 | Vitest | TypeScript layer | [`src/__tests__/`](../../src/__tests__/) — 560 cases |
 | Foundry | Pharos Solidity | [`test/`](../../test/) |
-| Cargo (nightly) | Odra Casper | [`contracts-odra/src/agent_skill_registry/tests.rs`](../../contracts-odra/src/agent_skill_registry/tests.rs) — 32 cases |
+| Cargo (nightly) | Odra Casper | [`contracts-odra/src/agent_skill_registry/tests.rs`](../../contracts-odra/src/agent_skill_registry/tests.rs) — 120 cases |
 | Cargo | Soroban verifiers (2 contracts) | [`agent_credential_verifier/src/test.rs`](../../contracts-soroban/agent_credential_verifier/src/test.rs) — 12 cases, [`reputation_aggregation_verifier/src/test.rs`](../../contracts-soroban/reputation_aggregation_verifier/src/test.rs) — 19 cases, both live on Testnet |
 | snarkjs | Circom circuits | [`circuits/test/`](../../circuits/test/) |
 
@@ -92,6 +92,14 @@ implementations. A breaking spec bump (v2) means existing implementations get a 
 
 Deprecated implementations are NOT deleted — they ship with a `@deprecated` JSDoc tag and
 a migration link. The `paymentPlugins` registry can hold both during the transition.
+
+## Casper Enhancement Proposal (draft)
+
+The Casper on-chain interface (`AgentSkillRegistry`: identity gate, reputation, escrow, symmetric
+dispute-bond arbitration, multisig+timelock governance) is drafted as a CEP in
+[`CEP-0000-agent-skill-trust-registry.md`](./CEP-0000-agent-skill-trust-registry.md). Not yet
+submitted upstream — see that file's Open Questions for what's blocking submission (independent
+second implementation, official CEP number).
 
 ## Open positions
 

@@ -74,10 +74,10 @@ describe("registrar system tool governance", () => {
     expect(source).toContain('telemetry.log("task_cancelled"');
   });
 
-  test("raw MCP method registration fails closed when SDK hook is unavailable", async () => {
+  test("raw MCP method registration uses the SDK's public setRequestHandler, not a private reach-around", async () => {
     const source = await readFile(new URL("../mcp/adapter/mcp_protocol_adapter.ts", import.meta.url), "utf-8");
-    expect(source).toContain("cannot register MCP method");
-    expect(source).not.toContain("rawServer?.setRequestHandler?.");
+    expect(source).toContain("server.server.setRequestHandler(");
+    expect(source).not.toContain("_requestHandlers");
   });
 
   test("dedup polling path uses reverse-lookup findTaskId for the task_id (NF-03)", async () => {

@@ -1,6 +1,12 @@
 # RFC — Symmetric Dispute Bond (P3-hard slashing)
 
-- **Status:** DRAFT — owner approval required to unblock T0.4 (the contract implementation)
+- **Status:** **Implemented & shipped** (updated 2026-07-21 — see "§10 Resolution" below for what
+  actually shipped vs. this RFC's original proposal). T0.4 landed in
+  `contracts-odra/src/agent_skill_registry.rs`: `dispute_result`, `respond_to_dispute`,
+  `concede_dispute`, `arbitrate` are live on Casper Testnet, covered by the Odra test suite, and
+  demoed end-to-end against real transactions (the "courtroom" flow in `DEMO_CASPER.md` and
+  `casper-judges.html`) — including a real `ProviderAtFault` verdict with reputation slashed
+  `50 → 40` and escrow + both bonds refunded to the requester.
 - **Track:** T0.3 (design-only). Gates: T0.4 (impl), T0.5 (native rep decay).
 - **Author:** KARMA maintainer · **Date:** 2026-06-24
 - **Companions:** [D1–D5 tradeoff study §D5](../superskills/plans/2026-06-23-d1-d5-tradeoff-study.md) ·
@@ -169,3 +175,58 @@ only on adjudicated/conceded fault), plus full parity suites green.
 
 Approve **symmetric dispute bonds, loser-pays, owner-arbiter v1** as the P3-hard design → unblocks
 T0.4 (impl) + T0.5 (native decay). Or redirect on OQ-1..OQ-4 / the arbiter model before code.
+
+## 10. Resolution — what actually shipped (added 2026-07-21)
+
+T0.4 shipped in `contracts-odra/src/agent_skill_registry.rs`, live on Casper Testnet. The four
+open questions from §8 were each settled by a concrete shipped constant/behavior, not left open:
+
+- **OQ-1 (`disputeBondBps` default):** shipped at `10_000` (1× escrow) — the recommended option,
+  set at `agent_skill_registry.rs:477` and owner-tunable afterward via the governed
+  `propose_set_dispute_bond_bps` lifecycle (not a plain setter — folded into the same
+  multisig+timelock proposal flow as every other governance parameter).
+- **OQ-2 (forfeited-bond sink):** shipped as **100% to the winner**, no burn and no protocol
+  treasury cut. On `Verdict::ProviderAtFault`, the requester receives `escrow_amount +
+  dispute_bond + provider_bond` in full (`agent_skill_registry.rs:909-912`); the symmetric case
+  (`RequesterAtFault`) credits the provider the same way.
+- **OQ-3 (`ARBITER_VETO_DELAY`):** **not shipped** — v1 has no veto-delay constant. The residual
+  arbiter-capture risk this RFC flagged (§6) is instead bounded by the arbiter role itself sitting
+  behind the governance-hardened multisig/timelock (a compromised or malicious arbiter address can
+  only be replaced via `propose_set_arbiter`'s governed lifecycle, not a unilateral swap), plus the
+  public `Disputed`/`Arbitrated`-equivalent on-chain state every read tool can observe. Revisit a
+  dedicated veto window only if live arbitration volume shows this isn't enough.
+- **OQ-4 (`REP_SLASH_STEP` magnitude):** shipped at `REP_SLASH_STEP = 10` against an earn rate of
+  `REPUTATION_STEP = 5` (`agent_skill_registry.rs:16,42`) — losing an adjudicated dispute costs
+  **2×** what completing a job earns, a deliberate asymmetry so bad-faith delivery can't be
+  amortized away by a couple of honest jobs afterward.
+
+The griefing-analysis acceptance gate (§6) — frivolous dispute EV < 0, honest dispute EV > 0 for a
+competent arbiter — was not re-derived against these exact shipped constants in a standalone proof,
+but the live courtroom run (`DEMO_CASPER.md`, re-run 2026-07-21) demonstrates the mechanism working
+as designed on a real contested delivery: bond-matching, adjudication, loser-pays, and reputation
+slashing all fired correctly end-to-end.
+
+## 11. Atomicity vs. quorum — why the "verify-then-act" critique doesn't apply here
+
+A pattern some other trust-layer entries in this buildathon call out (Casproof's `require_quorum`,
+positioned explicitly against "the exact pattern two of the strongest competitors ship") is a
+two-step exploit surface: a contract checks a quorum-attested verdict in one call, then a *separate*
+later call spends it — leaving a window where the attestation can go stale, be replayed, or simply
+never get consumed atomically with the payout.
+
+`arbitrate(job_id, verdict)` (`agent_skill_registry.rs:890-947`) doesn't have that window by
+construction: verdict computation and fund movement are the same function call, in the same
+transaction. `ProviderAtFault` credits `pending_withdrawals`, slashes reputation, and flips job
+status to `Refunded` in one execution; `RequesterAtFault` does the symmetric thing. There is no
+separate "verify" transaction whose result a later, different transaction trusts — every guard
+(`require_job`, dispute-bond presence, provider-bond presence, arbiter identity) is re-evaluated
+fresh, in the same call that moves the money. Same for `dispute_result` (bond lock + status flip,
+one call) and `respond_to_dispute` (provider bond lock + record, one call).
+
+What this does *not* answer: the source of truth for a verdict is one arbiter key, not a k-of-n
+quorum of independently computed verdicts. That's a different axis from atomicity — Casproof's
+guard defends against a forged or stale single attestation being trusted; KARMA's atomic-call
+design defends against a time gap between verifying and acting on one. The first gap is real and
+already tracked, not discovered here for the first time: see [Roadmap & team's "N-of-M
+arbitration"](../../README.md#roadmap--team) — v1 trusts one governed, replaceable arbiter address;
+whether a verdict should require multiple independent rulings is the explicit open v2 question.

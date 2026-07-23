@@ -10,9 +10,17 @@ import {
   registerDiscover,
   registerNativeTaskMethods,
   registerToolListSurface,
+  registerResources,
+  registerResourceTemplates,
+  registerResourceSubscribeCapability,
+  registerPrompts,
   type McpServerInstance,
   type McpTransport,
 } from "../mcp/adapter/mcp_protocol_adapter.js";
+import karmaResources from "../plugins/karma.resources.js";
+import casperResources from "../plugins/casper.resources.js";
+import systemResources from "../plugins/system.resources.js";
+import karmaPrompts from "../plugins/karma.prompts.js";
 
 function cloneState<T>(state: BaseState<T>): BaseState<T> {
   return JSON.parse(JSON.stringify(state));
@@ -27,10 +35,28 @@ export class SuperMcpRuntime<T = Record<string, unknown>> {
 
   private createServer(): McpServerInstance {
     const server = createMcpServer(this.version);
-    registerDiscover(server, this.tools);
+    registerDiscover(server);
     registerNativeTaskMethods(server);
     registerTools(server, this.tools, (tenantId, options) => this.getState(tenantId, options), state => this.saveState(state));
     registerToolListSurface(server, this.tools);
+
+    // DEBT-008: karma://system/pattern-debt is a pure in-memory read and stays registered even in
+    // safe mode; the Pharos/Casper resource templates make live RPC calls, so they are skipped
+    // under MCP_SAFE_MODE the same way registerTools already blocks capabilities:["network"] tools.
+    registerResources(server, systemResources.resources);
+    if (!ENV.MCP_SAFE_MODE) {
+      registerResourceTemplates(server, [...karmaResources.templates, ...casperResources.templates]);
+      // Phase 2: karma://pharos/jobs/{jobId}, its /dispute facet, and the Pharos agent-level
+      // resources get live push notifications via subscriptions/listen (wired in index.ts's
+      // startKarmaIndexer call) — Casper resources and the static pattern-debt resource are
+      // subscribable in principle (the capability is server-wide, not per-resource) but never
+      // actually push an update today; a client re-reads them on its own cadence instead.
+      registerResourceSubscribeCapability(server);
+      // agent_vetting calls live Pharos/Casper RPCs when invoked with an address/accountHash arg —
+      // gated the same as the resource templates above so MCP_SAFE_MODE=true means no network
+      // capability anywhere on the server, not just in tools/resources.
+      registerPrompts(server, karmaPrompts);
+    }
     return server;
   }
 
@@ -96,6 +122,13 @@ export class SuperMcpRuntime<T = Record<string, unknown>> {
     await server.connect(transport);
     await telemetry.log("server_connected", { transport: transport.constructor.name, ephemeral: true });
     return server;
+  }
+
+  // Factory for createMcpHandler()/serveStdio()-style callers that manage
+  // their own per-request transport internally and never call .connect()
+  // on the instance themselves (unlike connectEphemeral above).
+  createEphemeralServer(): McpServerInstance {
+    return this.createServer();
   }
 
   async requestSampling(params: any) {

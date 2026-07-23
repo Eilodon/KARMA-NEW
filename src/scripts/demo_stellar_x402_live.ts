@@ -34,7 +34,7 @@ import { fileURLToPath } from "node:url";
 import { ExactStellarScheme as ClientScheme } from "@x402/stellar/exact/client";
 import { ExactStellarScheme as FacilitatorScheme } from "@x402/stellar/exact/facilitator";
 import { createEd25519Signer, USDC_TESTNET_ADDRESS, STELLAR_TESTNET_CAIP2 } from "@x402/stellar";
-import type { PaymentRequirements } from "@x402/core/types";
+import type { PaymentRequirements, PaymentPayload } from "@x402/core/types";
 import { keystoreManager } from "../lib/keystore.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -71,7 +71,7 @@ async function main(): Promise<void> {
     extra: { areFeesSponsored: true },
   };
 
-  const packed: Packed = JSON.parse(readFileSync(PACKED_PATH, "utf8"));
+  const packed = JSON.parse(readFileSync(PACKED_PATH, "utf8")) as Packed;
 
   // ── Provider stub server ──────────────────────────────────────────────────
   const server = createServer(async (req, res) => {
@@ -93,7 +93,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    const paymentPayload = JSON.parse(Buffer.from(paymentHeader, "base64").toString("utf8"));
+    const paymentPayload = JSON.parse(Buffer.from(paymentHeader, "base64").toString("utf8")) as PaymentPayload;
     console.log("[provider] X-Payment received, verifying via facilitator...");
     const verifyResult = await facilitatorScheme.verify(paymentPayload, requirements);
     if (!verifyResult.isValid) {
@@ -206,7 +206,7 @@ async function main(): Promise<void> {
       "X-Nullifier": xNullifier,
     },
   });
-  const body = await final.json();
+  const body: unknown = await final.json();
   console.log(`[client] response ${final.status}:`, JSON.stringify(body, null, 2));
 
   server.close();

@@ -93,12 +93,16 @@ export function snapshot(
 
 /** Overwrite a single JSON file with the latest snapshot. Cheap (one fsync). */
 export function writeJsonSnapshot(path: string, record: DashboardRecord): void {
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- operator-controlled dashboard path
   mkdirSync(dirname(path), { recursive: true });
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- operator-controlled dashboard path
   writeFileSync(path, JSON.stringify(record, null, 2));
 }
 
 /** Append the snapshot to an ndjson stream — replay-friendly. */
 export function appendNdjsonSnapshot(path: string, record: DashboardRecord): void {
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- operator-controlled dashboard path
   mkdirSync(dirname(path), { recursive: true });
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- operator-controlled dashboard path
   appendFileSync(path, JSON.stringify(record) + "\n");
 }

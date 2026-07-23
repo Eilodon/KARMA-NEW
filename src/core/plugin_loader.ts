@@ -26,7 +26,8 @@ function parseList(raw: string): string[] {
 export function isTrustedBuiltInPlugin(fileName: string): boolean {
   return fileName === "system.tool.ts" || fileName === "system.tool.js"
       || fileName === "karma.tool.ts" || fileName === "karma.tool.js"
-      || fileName === "t3.tool.ts" || fileName === "t3.tool.js";
+      || fileName === "t3.tool.ts" || fileName === "t3.tool.js"
+      || fileName === "casper.tool.ts" || fileName === "casper.tool.js";
 }
 
 

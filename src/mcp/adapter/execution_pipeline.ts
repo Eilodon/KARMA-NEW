@@ -370,7 +370,7 @@ async function waitForTaskStoreInput(
   throw (signal?.reason || new TaskCancelledError(taskId));
 }
 
-async function applyInvocationGovernance(toolName: string, tenantId: string, requestId: string): Promise<void> {
+export async function applyInvocationGovernance(toolName: string, tenantId: string, requestId: string): Promise<void> {
   await assertPluginManifestStable();
 
   const rateLimitResult = await globalRateLimiter.check(tenantId);
@@ -422,7 +422,7 @@ export function registerTools<T = Record<string, unknown>>(
     registerMcpTool(
       server,
       tool,
-      async (args: unknown, extra: { signal?: AbortSignal; mcpReq?: { id?: unknown; signal?: AbortSignal; _meta?: Record<string, unknown> } } = {}) => {
+      async (args: unknown, extra: { signal?: AbortSignal; mcpReq?: { id?: unknown; signal?: AbortSignal; _meta?: Record<string, unknown>; envelope?: Record<string, unknown> } } = {}) => {
         // A2 chokepoint: any error thrown on a tool path is sanitized before it reaches the client.
         try {
         const ctx = getRequestContext();
@@ -430,7 +430,13 @@ export function registerTools<T = Record<string, unknown>>(
         const owner = taskOwner(ctx);
         const cleanArgs = sanitizeJsonValue(args);
         const taskSupport = tool.execution?.taskSupport || "forbidden";
-        const requestMetaCarrier = { _meta: extra.mcpReq?._meta };
+        // SDK v2 beta.2 lifts the reserved `io.modelcontextprotocol/*` envelope
+        // keys (including clientCapabilities) out of `mcpReq._meta` into a
+        // separate `mcpReq.envelope` (protocol revision 2026-07-28's per-request
+        // envelope). Merge both so KARMA's own `_meta`-shaped lookup keeps
+        // finding client capability declarations regardless of which bucket
+        // the SDK put them in.
+        const requestMetaCarrier = { _meta: { ...extra.mcpReq?._meta, ...extra.mcpReq?.envelope } };
         const supportsNativeTasks = clientSupportsNativeTasks(requestMetaCarrier) || clientSupportsNativeTasks(cleanArgs);
         const traceContext = {
           ...extractMcpTraceContext(cleanArgs),

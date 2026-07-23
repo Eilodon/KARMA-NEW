@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "calm": {
+      "type": "stdio",
+      "command": "bash",
+      "args": ["script/calm-mcp-launcher.sh"],
+      "env": {}
+    }
+  }
+}

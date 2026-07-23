@@ -17,6 +17,7 @@
  */
 
 import { keystoreManager } from "../lib/keystore.js";
+import { CasperLiveClient } from "../lib/casper/live_client.js";
 
 const SKILL = {
   name: "rwa_price_oracle",
@@ -102,17 +103,30 @@ async function runLive(args: RegisterArgs): Promise<void> {
   await keystoreManager.load(args.keystorePath, process.env.KEYSTORE_PASSWORD);
   const agentId = process.env.KARMA_AGENT_ID ?? keystoreManager.list()[0];
   if (!agentId) throw new Error("[register] keystore has no agents loaded");
+  const signer = keystoreManager.getCasperKeypair(agentId);
   const accountHash = keystoreManager.getCasperAccountHash(agentId);
   console.log(`[register] live mode — agent ${agentId} → ${accountHash}`);
   console.log(`[register] RPC: ${args.rpcUrl}`);
-  console.log(`[register] contract package: ${args.contract}`);
+  console.log(`[register] contract: ${args.contract}`);
 
-  // The actual deploy submission is intentionally NOT built here — it requires casper-client +
-  // contract package metadata (entry point + session args + payment) that vary per deploy.
-  // The dry-run output above is the canonical recipe a `casper-client put-deploy` call would
-  // mirror. Once the WASM is deployed (T13 owner step), the casper-js-sdk path lands here.
-  throw new Error(
-    "[register] live submission needs the casper-client deploy step — see DEMO_CASPER.md §Live run",
+  const client = new CasperLiveClient({
+    rpcUrl: args.rpcUrl,
+    contractHash: args.contract,
+    chainName: process.env.CASPER_CHAIN_NAME ?? "casper-test",
+    rpcHeaders: process.env.CASPER_RPC_API_KEY ? { Authorization: process.env.CASPER_RPC_API_KEY } : undefined,
+  });
+  const { txHash } = await client.registerSkill(signer, {
+    name: SKILL.name,
+    description: SKILL.description,
+    mcpEndpoint: SKILL.mcp_endpoint,
+    pricePerCallMotes: BigInt(SKILL.price_per_call_motes),
+    minReputationToInvoke: SKILL.min_reputation_to_invoke,
+    identityPolicy: SKILL.identity_policy,
+  });
+  console.log(`[register] submitted — transaction hash: ${txHash}`);
+  console.log(
+    `[register] confirm on an explorer, then read the assigned skill_id from the ` +
+    `SkillRegistered event or \`skill_count()\` on the contract.`,
   );
 }
 

@@ -128,6 +128,11 @@ const EnvSchema = z.object({
   // override per-deploy as the live facilitator endpoints settle.
   KARMA_X402_STELLAR_FACILITATOR_URL: z.string().url().optional(),
   KARMA_X402_CASPER_FACILITATOR_URL: z.string().url().optional(),
+  // `X402SettlementToken` (contracts-odra/src/x402_settlement_token.rs) package hash — the EIP-712
+  // domain's `contract_package_hash` and what `settleTransferWithAuthorization` submits against.
+  // Required for CasperX402Plugin to actually build/verify a payload; unset ⇒ payWithEnvelope
+  // throws at call time (registration itself only needs the facilitator URL above).
+  KARMA_X402_CASPER_SETTLEMENT_TOKEN: z.string().optional(),
 });
 
 const DEV_ENCRYPTION_KEYS = new Set([

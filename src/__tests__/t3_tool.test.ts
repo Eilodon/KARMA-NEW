@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { markTrustedRuntime, resetTrustedRuntimeForTest } from "../core/runtime_identity.js";
+import { withRequestContext, defaultRequestContext } from "../security/context.js";
 
 // Shared mock fn referenced both inside the vi.mock factory (constructor wiring) and
 // from individual test bodies (to control success/failure per test) — vi.hoisted is
@@ -61,6 +62,10 @@ vi.mock("@terminal3/t3n-sdk", () => ({
 vi.mock("../lib/keystore.js", () => ({
   keystoreManager: {
     has: vi.fn((id: string) => id === "agent-alpha"),
+    assertOwnedBy: vi.fn((id: string, tenantId: string) => {
+      if (id !== "agent-alpha") throw new Error(`[KARMA] Agent not found in keystore: ${id}`);
+      if (tenantId !== "tenant_local") throw new Error(`[KARMA] agent '${id}' is not accessible to this tenant`);
+    }),
     getAccount: vi.fn(() => ({
       address: "0x857c2F11E9EDDdC7DDc03d035B0998De3c7677ec",
       // 65-byte uncompressed secp256k1 pubkey — 04 + x(32) + y(32), even y → 02 compressed
@@ -274,6 +279,20 @@ describe("t3.tool.ts — t3_get_audit_events", () => {
       event_count: 1,
     });
     expect(Array.isArray((res.structuredContent as Record<string, unknown>).events)).toBe(true);
+  });
+
+  it("rejects a cross-tenant read even for a T3N-verified agent_id (STRIDE-S regression)", async () => {
+    const tools = createT3Tools();
+    const verify = tools.find(t => t.name === "t3_verify_identity")!;
+    await verify.handler({ agent_id: "agent-alpha" }, {} as never, undefined, undefined);
+
+    const getAudit = tools.find(t => t.name === "t3_get_audit_events")!;
+    const otherTenantCtx = { ...defaultRequestContext(), tenantId: "tenant_evil" };
+    await expect(
+      withRequestContext(otherTenantCtx, () =>
+        getAudit.handler({ agent_id: "agent-alpha" }, {} as never, undefined, undefined),
+      ),
+    ).rejects.toThrow(/not accessible to this tenant/i);
   });
 });
 
