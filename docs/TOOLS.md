@@ -133,6 +133,12 @@ table above). Backed by `RationaleAttestation.sol`, a standalone sidecar deploye
 never moves. It validates `jobId`/`requester` by reading the registry's existing public `jobs`
 getter, which is why no function needed to be added to the live contract.
 
+**Live on X Layer testnet:** [`0x402d0e…AAc108C1`](https://www.oklink.com/xlayer-test/address/0x402d0e956A3E2ba3936864Ba64201edBAAc108C1)
+(deploy tx [`0x9097ec…f531e0`](https://www.oklink.com/xlayer-test/tx/0x9097ec2ae08a670281c67157979506653c391e14216568aedd104cf8b6f531e0)).
+Verified with a real end-to-end round trip against job #1 on the live registry: `attest_rationale`
+tx [`0x388c24…7dbdd8`](https://www.oklink.com/xlayer-test/tx/0x388c248a921e1f129c4f3afb798ddd8a58b9235801e6b15551fe3a02127dbdd8)
+committed hash `0x325259…c65551aa`, and `get_rationale_hash` reads back that exact same hash.
+
 | Tool | Kind | Purpose |
 |---|---|---|
 | `attest_rationale` | write | Requester commits a 32-byte hash of their agent's decision rationale on-chain for a job, once. Requester-only, set-once, independent of job lifecycle. |

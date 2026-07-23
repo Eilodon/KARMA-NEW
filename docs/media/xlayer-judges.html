@@ -219,7 +219,7 @@
     <span class="stamp good"><span class="dot"></span>get_cross_chain_trust_score reads it live, right now</span>
     <span class="stamp good"><span class="dot"></span>102/102 Foundry tests passing (96 registry + 6 new)</span>
     <span class="stamp good"><span class="dot"></span>okx/onchainos-skills installed for real, hash-pinned</span>
-    <span class="stamp pending"><span class="dot"></span>RationaleAttestation.sol built + tested, deploy pending a funded key</span>
+    <span class="stamp good"><span class="dot"></span>RationaleAttestation.sol live — 0x402d0e…AAc108C1, real attest_rationale round trip</span>
   </div>
 
   <div class="plainhero">
@@ -343,7 +343,7 @@
   </div>
 
   <div class="section">
-    <h2>Rationale attestation (P2-A) — ported from Casper, X Layer's turn next</h2>
+    <h2>Rationale attestation (P2-A) — ported from Casper, live on X Layer</h2>
     <p class="deck"><span class="plain-lead">In one sentence: an agent can commit a hash of why it made a call, on-chain, without ever publishing the plaintext.</span>
       Casper's live contract already does this (<code>casper_attest_rationale</code> /
       <code>casper_get_rationale_hash</code>). <code>RationaleAttestation.sol</code> ports the same
@@ -361,9 +361,34 @@ Ran 6 tests for test/RationaleAttestation.t.sol:RationaleAttestationTest
 <span class="ok">[PASS] test_GetRationaleHash_ReturnsZeroIfNotAttested()</span>
 <span class="ok">Suite result: ok. 6 passed; 0 failed; 0 skipped</span></pre>
     </div>
-    <p class="cap">Pending: broadcasting the deploy tx (needs a funded X Layer testnet deployer key) — once live, this
-      section gets a real <code>attest_rationale</code> → <code>get_rationale_hash</code> round trip and a second
-      OKLink link, the same way the trust-score section above already does.</p>
+    <p class="cap">Deployed for real — <code>forge create ... --broadcast</code> against X Layer testnet, then a full live
+      round trip: register a skill, open job #1 against it, attest a rationale hash for that job, and read it back.
+      Every hash below is byte-for-byte the same, read straight off the chain:</p>
+    <div class="term">
+      <div class="bar"><span></span><span></span><span></span></div>
+      <pre>$ forge create contracts/RationaleAttestation.sol:RationaleAttestation \
+    --rpc-url $XLAYER_RPC_URL --private-key $KEY --broadcast \
+    --constructor-args 0xBF285628869c2EFaf6731F8503B39B7130474Cd2
+Deployer: 0xc3BbCd6FCce48E04edb5985FE869203768bbCccd
+<span class="ok">Deployed to: 0x402d0e956A3E2ba3936864Ba64201edBAAc108C1</span>
+Transaction hash: 0x9097ec2ae08a670281c67157979506653c391e14216568aedd104cf8b6f531e0
+
+$ cast send $ATT "attestRationale(uint256,bytes32)" 1 \
+    0x32525931535f69dd49a4fc00639cf8d61eaed237e80d3cd507ce0ac2c65551aa \
+    --private-key $KEY --rpc-url $XLAYER_RPC_URL
+<span class="ok">status  1 (success)</span>
+transactionHash  0x388c248a921e1f129c4f3afb798ddd8a58b9235801e6b15551fe3a02127dbdd8
+
+$ cast call $ATT "getRationaleHash(uint256)(bytes32)" 1 --rpc-url $XLAYER_RPC_URL
+<span class="ok">0x32525931535f69dd49a4fc00639cf8d61eaed237e80d3cd507ce0ac2c65551aa</span>  <span class="muted"># byte-for-byte match</span></pre>
+    </div>
+    <div class="explorer-card">
+      <div class="addr"><span>RationaleAttestation</span> · 0x402d0e956A3E2ba3936864Ba64201edBAAc108C1</div>
+      <a class="cta" href="https://www.oklink.com/xlayer-test/address/0x402d0e956A3E2ba3936864Ba64201edBAAc108C1">View on OKLink →</a>
+    </div>
+    <p class="cap">Reproduce the read yourself, no key needed — <code>cast call 0x402d0e956A3E2ba3936864Ba64201edBAAc108C1
+      "getRationaleHash(uint256)(bytes32)" 1 --rpc-url https://testrpc.xlayer.tech</code>, or the attest tx directly on
+      <a href="https://www.oklink.com/xlayer-test/tx/0x388c248a921e1f129c4f3afb798ddd8a58b9235801e6b15551fe3a02127dbdd8">OKLink</a>.</p>
   </div>
 
   <div class="section">
@@ -376,7 +401,7 @@ Ran 6 tests for test/RationaleAttestation.t.sol:RationaleAttestationTest
         <tr><td><code>get_cross_chain_trust_score</code></td><td><span class="pill real">real</span></td><td>Free ASP, no auth, reads Pharos + X Layer + Casper live, notes (not fabricates) unconfigured/ZK-gated legs — shown running above.</td></tr>
         <tr><td><code>RationaleAttestation.sol</code></td><td><span class="pill real">real</span></td><td>Sidecar contract + 6 Foundry tests (102/102 suite total), ported from Casper's live P2-A feature — validates against the deployed registry's existing <code>jobs()</code> getter, no change to that contract.</td></tr>
         <tr><td><code>attest_rationale</code> / <code>get_rationale_hash</code> MCP tools</td><td><span class="pill real">real</span></td><td>Wired into the MCP tool registry (<code>rationale_attestation.tool.ts</code>), trusted in-process built-in, unit tests passing.</td></tr>
-        <tr><td>RationaleAttestation deploy tx</td><td><span class="pill pending">pending</span></td><td>Code + tests done; broadcasting needs a funded X Layer testnet deployer key (same one-time human step as the registry's own deploy).</td></tr>
+        <tr><td>RationaleAttestation deploy tx</td><td><span class="pill real">real</span></td><td>Deployed at <code>0x402d0e956A3E2ba3936864Ba64201edBAAc108C1</code>; live round trip verified — <code>attest_rationale</code> then <code>get_rationale_hash</code> on job #1 return the identical hash.</td></tr>
         <tr><td><code>okx/onchainos-skills</code> install</td><td><span class="pill real">real</span></td><td>Installed for real via <code>npx skills add</code>, hash-pinned in <code>skills-lock.json</code>, tracked in this repo at <code>.claude/skills/</code> — 8 skills, verified no tool-name collisions.</td></tr>
         <tr><td>Onchain OS composability demo</td><td><span class="pill real">real</span> / <span class="pill pending">pending</span></td><td>Discovery step is documented (real CLI syntax from the installed skill), not executed — running it live needs the operator's own OKX Agentic Wallet login. The trust-score + decision half is fully live, shown above.</td></tr>
       </table>
