@@ -2,10 +2,12 @@
 # Deploy AgentSkillRegistry to X Layer (OKX's EVM L2) — testnet by default.
 #
 # Same contract, same Deploy.s.sol used for Pharos (script/Deploy.s.sol is chain-agnostic;
-# only --rpc-url and the funded deployer key change). Run this from a machine with `forge`
-# installed (foundryup) — it was not possible to install Foundry inside this session's
-# sandbox (GitHub release-API egress is blocked by this session's org policy), so this script
-# is meant to be run by a human/CI with real network + GitHub access, not by the agent.
+# only --rpc-url and the funded deployer key change). Needs `forge` on PATH and a funded
+# PRIVATE_KEY — whether that's available to the agent running this depends on the sandbox
+# (an earlier session couldn't install Foundry because GitHub release-API egress was
+# policy-blocked there; that's not universal — check `forge --version` before assuming a
+# human has to run this). Either way, funding the deployer key from a faucet is a human step
+# (captcha/account-gated); once funded, this script can be run by whoever holds the key.
 #
 # Usage:
 #   1. cast wallet new                      # generate a fresh deployer key, or reuse one

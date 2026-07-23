@@ -65,16 +65,33 @@ already uses elsewhere — single-chain reputation is computed with an EigenTrus
 that decays over time and downweights thin history (see [Why the tech holds up](#why-the-tech-holds-up)).
 An agent with 1 job on X Layer counts exactly as much as one with 200 jobs on Casper in today's
 cross-chain average. The fix is straightforward (weight each chain's contribution by job count,
-decayed) but wasn't worth rushing into untested code days before a deadline;
+decayed) but wasn't worth rushing into the *shipped* tool days before a deadline;
 `jobsAsProvider`/`jobsAsRequester` are already returned per chain in the tool's output specifically
-so a caller can apply that judgment themselves until the aggregate does it natively.
+so a caller can apply that judgment themselves until the aggregate does it natively. A worked
+illustration of that weighting now exists as a separate reference script, not wired into the paid
+tool — see the Evaluator note below.
 
 **Honest status on the chain adapter itself:** the X Layer chain adapter, x402 payment plugin, and
-Trust Oracle tool are built, typechecked, and unit-tested (907/912 suite passing) — Foundry could
-not be installed inside the sandbox that assembled this pivot (GitHub release-API egress is
-policy-blocked there), so the `AgentSkillRegistry` **testnet broadcast is the next concrete step**
-(`script/deploy_xlayer.sh`, needs `forge` + a faucet-funded testnet key — see the checklist §1).
+Trust Oracle tool are built, typechecked, and unit-tested (912/912 suite passing). An earlier
+session that assembled this pivot couldn't install Foundry (GitHub release-API egress was
+policy-blocked there) and left the `AgentSkillRegistry` **testnet broadcast** as the next step —
+that limitation doesn't hold in every environment: `forge`/`cast` are available here, and
+`forge script script/Deploy.s.sol --rpc-url https://testrpc.xlayer.tech --chain-id 1952` (no
+`--broadcast`) simulates clean against the live testnet RPC — compiles, deploys in-simulation,
+estimates ~0.000185 OKB gas. A fresh deployer key was generated in-session
+(`cast wallet new`, testnet-only, holds no other value) and is sitting in the untracked local
+`.env`. The **only remaining step is funding that address from the faucet** (a human action —
+faucets are captcha/account-gated); once funded, `PRIVATE_KEY=... ./script/deploy_xlayer.sh
+testnet` broadcasts for real. See the checklist §1 for the exact address and command.
 Once deployed, the same tool starts returning real X Layer reads with zero code changes.
+
+**On the OKX.AI Evaluator role (checklist §7):** not registered, not staked — unchanged, since
+that still requires >=100 OKB of real capital, a genuine out-of-scope-for-this-session decision,
+not a tooling limitation. What *is* new: a reference implementation of the "sharper judgment"
+signal KARMA could feed an Evaluator — `pnpm demo:evaluator-skill-reference <requester> <provider>`
+([`src/scripts/evaluator_skill_reference.ts`](src/scripts/evaluator_skill_reference.ts)) — pulls
+both parties' `get_cross_chain_trust_score` reads and prints the job-count-weighted comparison
+described above. It's illustrative only: it doesn't vote, submit, or touch any OKX.AI contract.
 
 **Reused, not rebuilt.** The escrow contract, the dispute-bond arbitration, the `IPaymentPlugin`
 interface, and the reputation kernel all predate this hackathon (Casper/Stellar work below). New
@@ -210,7 +227,7 @@ is the next step (`script/deploy_xlayer.sh`, see [checklist](docs/OKX_HACKATHON_
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm typecheck && pnpm test    # 907/912 passed, 5 pre-existing skips unrelated to this pivot
+pnpm typecheck && pnpm test    # 912/912 passed
 ```
 
 ```env
@@ -263,7 +280,7 @@ Full tables, kept out of this README to keep the OKX pitch focused:
 ## Testing
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm test   # 907/912 passed, 5 pre-existing skips unrelated to this pivot
+pnpm typecheck && pnpm lint && pnpm test   # 912/912 passed
 ```
 
 The X Layer/OKX.AI additions (`src/lib/xlayer.ts`, `src/plugins/x402_xlayer.ts`,
