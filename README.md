@@ -42,7 +42,7 @@ chain-independent), reputation pulled from every chain it actually has history o
 |---|---|---|
 | **Software Utility** | A reusable trust-lookup primitive other ASPs call before transacting — not a single consumer app | `get_cross_chain_trust_score` (`src/plugins/trust_oracle.tool.ts`) |
 | **Finance Copilot** (secondary) | Counterparty risk scoring is a finance-copilot primitive — "should I let my agent pay this provider" | Same tool; `aggregateScore` is an evidence-backed risk read, not a black-box output |
-| OKX ecosystem integration | Agentic Wallet, Onchain OS `okx-ai` skill (ERC-8004), X Layer, x402 (`@x402/evm`, settling in USDT/USDG — confirmed, not USDC) | `src/lib/xlayer.ts`, `src/plugins/x402_xlayer.ts`, `script/deploy_xlayer.sh` |
+| OKX ecosystem integration | Agentic Wallet, Onchain OS `okx-ai` skill (ERC-8004), X Layer, x402 (`@x402/evm`, settling in USD₮0/USDG on X Layer **mainnet** — verified on-chain; no testnet settlement asset exists yet, see checklist §9) | `src/lib/xlayer.ts`, `src/plugins/x402_xlayer.ts`, `script/deploy_xlayer.sh` |
 | Technical depth (separate from "is it live on X Layer yet") | Same escrow/dispute/reputation contract, same test suite, already proven on two other chains — X Layer is a chain *adapter*, not a rewrite | `contracts/AgentSkillRegistry.sol` (96/96 Foundry tests, unchanged) |
 
 **Why this is easy to judge quickly:** one free tool, one call, one JSON answer with the evidence

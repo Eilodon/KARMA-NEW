@@ -123,22 +123,35 @@ session won't do on your behalf, and doesn't require any payment either way sinc
 - [ ] Consider inviting 1-2 other Genesis builders to try the Trust Oracle for real, so any
       traction numbers in the submission are real usage, not self-generated calls.
 
-## 9. Optional, later: enable the paid x402 tier
+## 9. Optional, later: enable the paid x402 tier — currently mainnet-only, recommend NOT doing this for Genesis
 
-Not needed for Genesis — do this only if/when you want the ASP to actually charge per call. The
-*code* side needs zero changes to turn on — `src/lib/payment/boot.ts` already registers
-`XLayerX402Plugin` the moment `KARMA_X402_XLAYER_FACILITATOR_URL` is set, and
-`x402_xlayer.ts:defaultAssetForNetwork` already reads `XLAYER_SETTLEMENT_ASSET_TESTNET_ADDRESS` /
-`_ADDRESS` — this was checked in-session, both are pure env-var toggles. What's blocking is two
-real-world values, and unlike §1's funding step, these aren't things an agent should guess at:
-- [ ] Get the real settlement-asset (USDT or USDG, confirmed — **not** USDC) contract address on
-      X Layer **testnet** from `github.com/okx/xlayer-tokenlist`. Checked in-session: that repo's
-      current release only lists **mainnet** (chainId 196) addresses (`xlayer.tokenlist.json`) —
-      no testnet list was found. Guessing a testnet address here is worse than leaving it unset:
-      the plugin deliberately throws instead of silently misdirecting a payment
-      (`x402_xlayer.ts`'s own comment explains why), so an agent should not fabricate one. Confirm
-      the real testnet address directly with OKX (or from a testnet-specific source, if one
-      surfaces) before setting `XLAYER_SETTLEMENT_ASSET_TESTNET_ADDRESS`.
+Not needed for Genesis — and after deeper research in-session, actively **not recommended** while
+the submission strategy is "testnet-only, zero real money." The *code* side needs zero changes to
+turn on — `src/lib/payment/boot.ts` already registers `XLayerX402Plugin` the moment
+`KARMA_X402_XLAYER_FACILITATOR_URL` is set, and `x402_xlayer.ts:defaultAssetForNetwork` already
+reads `XLAYER_SETTLEMENT_ASSET_TESTNET_ADDRESS` / `_ADDRESS` — both pure env-var toggles. What's
+blocking isn't a missing value to look up, it's a real gap in what OKX has published:
+
+- **Settlement asset — resolved, but mainnet-only.** Checked in-session against OKX's *technical*
+  source (`github.com/okx/payments/go`'s `FACILITATOR.md`, more authoritative for this than the
+  marketing copy at okx.com/learn/okx-ai): X Layer (`eip155:196`) settles in **USD₮0** — Tether's
+  LayerZero omnichain OFT, not plain USDT — at
+  `0x779Ded0c9e1022225f8E0630b35a9b54bE713736`. `github.com/okx/xlayer-tokenlist` additionally
+  confirms **USDG** at `0x4ae46a509F6b1D9056937BA4500cb143933D2dc8`. Both verified live on-chain
+  in-session (`cast call ... symbol()` returned `"USD₮0"` / `"USDG"`, 6 decimals each). **Both
+  addresses have zero bytecode on X Layer testnet** (`cast code` returned `0x`) — confirmed
+  in-session, not assumed.
+- **No testnet path found anywhere official.** Neither `xlayer-tokenlist` nor the facilitator SDK
+  lists a testnet (`eip155:1952`) entry for X Layer — mainnet (`eip155:196`) is the only chain ID
+  either source documents for this chain. That means OKX's real x402 settlement infrastructure for
+  X Layer appears to only exist on **mainnet** today, not testnet.
+- [ ] **Decision needed, not a lookup:** enabling the paid tier via OKX's real facilitator means
+      real USD₮0/USDG on mainnet — i.e., real money, which conflicts with §0's "zero real money"
+      strategy for this hackathon. Recommend leaving this off for Genesis, same conclusion as
+      before but now for a *documented* reason (no testnet facilitator exists) instead of "haven't
+      found the address yet." If real revenue is wanted later (independent of the hackathon
+      deadline, and only with funds you're prepared to spend), mainnet is the actual path — not a
+      testnet workaround.
 - [ ] Set `KARMA_X402_XLAYER_FACILITATOR_URL` once you have a real facilitator endpoint (OKX
       Payment SDK recommended) — this needs an OKX Payment SDK account/credentials, the same kind
       of human/credential step as §2's API keys.
