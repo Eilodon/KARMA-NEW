@@ -1,0 +1,42 @@
+name: karma-oracle
+
+services:
+  mcp-server:
+    build:
+      context: ../..
+      dockerfile: Containerfile
+    container_name: karma_server
+    env_file:
+      - .env
+    restart: unless-stopped
+    expose:
+      - "3333"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 512m
+
+  caddy:
+    image: docker.io/library/caddy:2-alpine
+    container_name: karma_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - PUBLIC_HOST=${PUBLIC_HOST:?set PUBLIC_HOST}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - mcp-server
+
+volumes:
+  caddy_data:
+  caddy_config:
