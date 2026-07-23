@@ -17,6 +17,11 @@ describe("isTrustedBuiltInPlugin — KARMA first-party plugin", () => {
     expect(isTrustedBuiltInPlugin("casper.tool.js")).toBe(true);
   });
 
+  it("treats rationale_attestation.tool.ts/js as a trusted in-process built-in (P2-A X Layer port)", () => {
+    expect(isTrustedBuiltInPlugin("rationale_attestation.tool.ts")).toBe(true);
+    expect(isTrustedBuiltInPlugin("rationale_attestation.tool.js")).toBe(true);
+  });
+
   it("does NOT trust arbitrary third-party plugins", () => {
     expect(isTrustedBuiltInPlugin("random.tool.ts")).toBe(false);
     expect(isTrustedBuiltInPlugin("evil.tool.js")).toBe(false);
