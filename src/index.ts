@@ -149,12 +149,24 @@ async function main() {
 
     app.disable("x-powered-by");
 
-    // TEMP DIAGNOSTIC (remove once the Render health-check timeout is root-caused): log every
-    // inbound request before any gate runs, so we can see whether Render's internal health check
-    // even reaches Express, and if so what Host/method/path it actually sends.
-    app.use((req, res, next) => {
-      console.error(`[KARMA][diag] ${req.method} ${req.url} host=${req.headers.host ?? "<none>"} ua=${req.headers["user-agent"] ?? "<none>"}`);
-      next();
+    // Health checks are registered before the Host/Origin gates below: platform health-checkers
+    // (Fly's http_service.checks, Render's internal probe, k8s-style liveness/readiness probes)
+    // connect over whatever internal address/interface the platform uses -- a private IPv6 (6PN)
+    // address on Fly, loopback on others -- and don't send the public-facing Host header
+    // ALLOWED_HOSTS expects. Confirmed via `flyctl ssh console` + `wget` against the machine's own
+    // fdaa:... address: 403 Invalid Host, even though the exact same request over 127.0.0.1
+    // succeeded, and even after binding HTTP_HOST to "::" fixed the earlier IPv6-unreachable
+    // ("connection refused") symptom. These endpoints return no sensitive data (liveness: a static
+    // version string; readiness: a storage-backend health boolean), so exempting them from
+    // Host/Origin validation is standard practice for infra probes, not a meaningful attack surface.
+    app.get("/health/liveness", (req, res) => { res.json({ status: "alive", version: "1.0.0" }); });
+    app.get("/health/readiness", async (req, res) => {
+      try {
+        const healthy = await runtime.healthCheck();
+        res.status(healthy ? 200 : 503).json({ status: healthy ? "ready" : "not_ready", storage: ENV.STORAGE_DRIVER });
+      } catch {
+        res.status(503).json({ status: "not_ready", storage: ENV.STORAGE_DRIVER });
+      }
     });
 
     app.use((req, res, next) => {
@@ -220,16 +232,6 @@ async function main() {
         return;
       }
       next(error);
-    });
-
-    app.get("/health/liveness", (req, res) => { res.json({ status: "alive", version: "1.0.0" }); });
-    app.get("/health/readiness", async (req, res) => {
-      try {
-        const healthy = await runtime.healthCheck();
-        res.status(healthy ? 200 : 503).json({ status: healthy ? "ready" : "not_ready", storage: ENV.STORAGE_DRIVER });
-      } catch {
-        res.status(503).json({ status: "not_ready", storage: ENV.STORAGE_DRIVER });
-      }
     });
 
     app.use("/mcp", async (req, res, next) => {
