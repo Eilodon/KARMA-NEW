@@ -60,6 +60,38 @@ start.
 
 That URL is what goes into the OKX.AI ASP registration endpoint field.
 
+**Confirmed live:** `https://karma-trust-oracle.fly.dev/health/liveness` returns
+`{"status":"alive","version":"1.0.0"}`, and `/.well-known/mcp-server-card` lists
+`get_cross_chain_trust_score` correctly.
+
+## If the health check never goes green
+
+Two non-obvious platform-specific fixes are already baked into this config/codebase — if you're
+retracing this on a fork or a different app, here's why they're needed:
+
+1. **Bind `HTTP_HOST` to `"::"`, not `"0.0.0.0"`.** Fly machines are reachable over private IPv6
+   (6PN) as their primary network — a machine typically has no private IPv4 address at all
+   (`flyctl machine list` shows only an `fdaa:...` address). Node's `net.Server` binds IPv4-only on
+   `"0.0.0.0"`, so Fly's health checker connecting over IPv6 gets `connect: connection refused` even
+   though the app is up and reachable via IPv4 loopback. `"::"` binds dual-stack on Linux by
+   default, covering both — already set in `fly.toml`.
+2. **`createMcpExpressApp()` needs `{ host: ENV.HTTP_HOST }` passed explicitly.** Called with no
+   options, the `@modelcontextprotocol/express` SDK defaults `host` to `"127.0.0.1"` and — since
+   that's on its localhost list — silently adds its own DNS-rebinding-protection middleware that
+   403s any request whose Host header isn't literally `localhost`/`127.0.0.1`/`::1`. This runs
+   *before* every route KARMA registers (including `/health/liveness`), independent of and earlier
+   than KARMA's own `isAllowedHost`/`ALLOWED_HOSTS` check — so no amount of fixing KARMA's own Host
+   allowlist helps until this is fixed too. Already fixed in `src/index.ts`
+   (`createMcpExpressApp({ host: ENV.HTTP_HOST })`); if you're seeing `403` (not `connection
+   refused`) from `flyctl ssh console` + `wget` against the machine's own private IPv6 address, this
+   is almost certainly why.
+
+Diagnosing this took `flyctl ssh console` + manual `wget` calls against 127.0.0.1 vs. the machine's
+own `fdaa:...` address to tell "app isn't running" apart from "app is running but something in front
+of it is rejecting the request" — `flyctl checks list`'s cached status can go stale/stuck for a long
+time after a failed deploy and stop reflecting reality, so don't trust it alone once you're this deep
+into debugging; re-verify directly.
+
 ## Refreshing `KARMA_INDEXER_FROM_BLOCK`
 
 The pinned block number goes stale over time (harmlessly — it just means slightly more history gets
@@ -85,11 +117,7 @@ Update the value in `fly.toml`, then `flyctl deploy` again.
 - This intentionally skips Redis/JWT/production hardening (`docs/RUNTIME.md` production section) —
   fine for a read-only, unauthenticated-by-design demo tool with rate limiting on, not appropriate
   if you later add `karma.tool.ts` (which moves real value and needs the full posture).
-
-## If you'd rather I drive the deploy directly
-
-`flyctl` supports a scoped API token (`flyctl tokens create deploy`, or `flyctl auth token` for a
-full-access one) via the `FLY_API_TOKEN` env var, instead of an interactive login. If you'd rather
-hand me that than paste logs back and forth like we did on Render, I can run `flyctl deploy`/`flyctl
-logs` myself from here. It's more scoped than SSH/root access (revocable anytime from the Fly
-dashboard, API-only, no shell on the machine) — entirely your call.
+- `min_machines_running = 1` without `auto_stop_machines` off would normally create a second
+  standby machine for HA on top of the primary — both currently run for the ~$2-4/month range
+  quoted above; drop to a single machine (`flyctl machine list`, then `flyctl machine destroy` the
+  extra one) if you'd rather minimize cost over redundancy for a free demo tool.
