@@ -1,0 +1,78 @@
+services:
+  - type: web
+    name: karma-trust-oracle
+    env: docker
+    dockerfilePath: ./Containerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health/liveness
+    envVars:
+      # Render routes to whatever port PORT is set to; HTTP_PORT is KARMA's own var
+      # (src/config/env.ts) — both must match.
+      - key: PORT
+        value: "3333"
+      - key: NODE_ENV
+        value: development
+      - key: TRANSPORT_DRIVER
+        value: http
+      - key: HTTP_HOST
+        value: 0.0.0.0
+      - key: HTTP_PORT
+        value: "3333"
+      - key: STORAGE_DRIVER
+        value: fs
+      - key: TELEMETRY_DRIVER
+        value: stdout
+      - key: MCP_PROJECT_ID
+        value: KARMA
+      - key: MCP_TENANT_ID
+        value: tenant_public
+
+      - key: MCP_AUTH_MODE
+        value: api_key
+      - key: MCP_API_KEY
+        generateValue: true
+
+      # Must match this service's onrender.com hostname — if you rename the
+      # service in the Render dashboard, update these two to match.
+      - key: ALLOWED_HOSTS
+        value: karma-trust-oracle.onrender.com
+      - key: ALLOWED_ORIGINS
+        value: https://karma-trust-oracle.onrender.com
+
+      # Minimal plugin set: only the free trust-oracle tool + the always-on
+      # system tool. No karma.tool.ts (skill economy), no Redis, no indexer —
+      # get_cross_chain_trust_score reads chain state per call and needs none
+      # of that (src/plugins/trust_oracle.tool.ts).
+      - key: MCP_SAFE_MODE
+        value: "false"
+      - key: MCP_PLUGIN_ISOLATION_MODE
+        value: policy
+      - key: MCP_PLUGIN_ALLOWLIST
+        value: system.tool.js,trust_oracle.tool.js
+
+      - key: ENABLE_RATE_LIMIT
+        value: "true"
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: "60"
+      - key: RATE_LIMIT_WINDOW_MS
+        value: "60000"
+      - key: ENABLE_QUOTA
+        value: "true"
+      - key: QUOTA_DAILY_LIMIT
+        value: "2000"
+
+      # Already-deployed contracts (see main README's "Live deployments" table).
+      - key: PHAROS_RPC_URL
+        value: https://atlantic.dplabs-internal.com
+      - key: PHAROS_CHAIN_ID
+        value: "688689"
+      - key: PHAROS_CONTRACT_ADDRESS
+        value: "0xc6d5c146209e0833634bd33fafb9e65081b905ae"
+
+      - key: XLAYER_RPC_URL
+        value: https://testrpc.xlayer.tech
+      - key: XLAYER_CHAIN_ID
+        value: "1952"
+      - key: XLAYER_CONTRACT_ADDRESS
+        value: "0xBF285628869c2EFaf6731F8503B39B7130474Cd2"
