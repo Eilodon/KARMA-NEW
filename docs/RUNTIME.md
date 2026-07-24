@@ -437,11 +437,20 @@ export default tools;
 | --- | --- | --- |
 | `/mcp` | POST | Stateless MCP JSON-RPC endpoint. |
 | `/mcp` | GET/DELETE | Rejected with 405 in stateless HTTP mode. |
-| `/health/liveness` | GET | Basic liveness. |
-| `/health/readiness` | GET | Runtime/storage readiness. |
+| `/health/liveness` | GET | Basic liveness. Exempt from `ALLOWED_HOSTS`/`ALLOWED_ORIGINS` — see below. |
+| `/health/readiness` | GET | Runtime/storage readiness. Exempt from `ALLOWED_HOSTS`/`ALLOWED_ORIGINS` — see below. |
 | `/.well-known/mcp.json` | GET | Server card. |
 | `/.well-known/mcp-server-card` | GET | Server card alias. |
 | `/.well-known/oauth-protected-resource` | GET | OAuth protected resource metadata. |
+
+`/health/liveness` and `/health/readiness` are registered before the Host/Origin gates
+(`src/index.ts`) specifically because platform health-checkers (Fly's `http_service.checks`,
+Render's internal probe, k8s-style liveness/readiness probes, most load balancers) connect over
+whatever internal address the platform uses — a private IPv6 address, loopback, a pod IP — not the
+public Host header `ALLOWED_HOSTS` is configured for, and would otherwise get `403 Invalid Host` on
+every probe. Both endpoints return no sensitive data (a static version string; a storage-backend
+health boolean), so this is standard practice for infra probes, not a meaningful attack-surface
+change.
 
 Required HTTP `/mcp` headers:
 
@@ -860,6 +869,33 @@ Set `ALLOWED_HOSTS` to include the exact Host header, including port:
 ```env
 ALLOWED_HOSTS=127.0.0.1:3333,localhost:3333
 ```
+
+If this happens specifically on a **platform health check** (deploy never leaves "waiting for
+health check", `flyctl checks list`/dashboard shows the check permanently failing even though the
+process logs show it started fine) and you've already confirmed `/health/liveness` and
+`/health/readiness` are exempt from the app's own `ALLOWED_HOSTS` gate (`src/index.ts` registers
+them before that middleware), the request may never be reaching KARMA's own code at all: check
+whether `createMcpExpressApp()` was called **without** the `host` option. Called bare, the
+`@modelcontextprotocol/express` SDK defaults `host` to `"127.0.0.1"` and — since that's on its
+internal localhost list — silently installs its **own** DNS-rebinding-protection middleware that
+403s any request whose Host header isn't literally `localhost`/`127.0.0.1`/`::1`. This runs before
+every route the app registers (including the exempted health routes above) and is entirely separate
+from `ALLOWED_HOSTS`/`isAllowedHost`, so no amount of tuning that config fixes it. Confirmed live on
+a Fly.io deploy: `flyctl ssh console` + `wget` against the machine's own private IPv6 address
+(`fdaa:...`, not `127.0.0.1`) returned `403` even after `ALLOWED_HOSTS` and the health-route
+ordering were both already correct — fixed by passing `createMcpExpressApp({ host: ENV.HTTP_HOST })`
+so the SDK only applies its default when actually bound to a localhost-style host. Any production
+HTTP deployment (`HTTP_HOST` other than `127.0.0.1`/`localhost`) needs this passed through, on any
+platform whose health-checker or reverse proxy doesn't present a localhost-style Host header —
+likely the true root cause of an earlier, never-fully-diagnosed timeout on a different platform
+(Render) during the same investigation, not just that attempt's on-chain-indexer resource
+contention (see `deploy/render/README.md`, `deploy/fly/README.md`).
+
+Separately, if the process log shows the server listening but the platform's own health checker
+reports `connect: connection refused` (not `403`) even after the above, check `HTTP_HOST`: some
+platforms (Fly.io Machines) route health checks over IPv6 only, and Node's `net.Server` binds
+IPv4-only on `"0.0.0.0"`. Bind `"::"` instead — it's dual-stack on Linux by default and doesn't
+regress IPv4-primary platforms.
 
 ### JWT/OIDC request returns `401 Unauthorized`
 
