@@ -17,9 +17,13 @@ primary_region = "sin"
   MCP_AUTH_MODE = "api_key"
   # MCP_API_KEY is a secret -- set it with `flyctl secrets set MCP_API_KEY=...`, never here.
 
-  # Must match this app's *.fly.dev hostname. If `karma-trust-oracle` is already taken and you
-  # picked a different app name above, update both of these to match before deploying.
-  ALLOWED_HOSTS = "karma-trust-oracle.fly.dev"
+  # Must include this app's *.fly.dev hostname (if `karma-trust-oracle` is already taken and you
+  # picked a different app name above, update it here too) PLUS localhost/127.0.0.1 variants --
+  # Fly's internal health checker (fly.toml's http_service.checks) hits the app directly inside
+  # the machine on 127.0.0.1, not through the public hostname, and src/index.ts's isAllowedHost
+  # 403s any Host header not on this list -- confirmed via `flyctl ssh console` + `wget
+  # localhost:3333` returning 403 while the public edge just hung with no live backend to route to.
+  ALLOWED_HOSTS = "karma-trust-oracle.fly.dev,localhost,localhost:3333,127.0.0.1,127.0.0.1:3333"
   ALLOWED_ORIGINS = "https://karma-trust-oracle.fly.dev"
 
   # Minimal plugin set: only the free trust-oracle tool + the always-on system tool. No
