@@ -137,7 +137,17 @@ async function main() {
     const cors = (await import("cors")).default;
     const express = (await import("express")).default;
 
-    const app = createMcpExpressApp();
+    // Pass `host` through so createMcpExpressApp() only applies its own localhost-only DNS-
+    // rebinding middleware for local/stdio-adjacent dev (HTTP_HOST=127.0.0.1). In production HTTP
+    // (HTTP_HOST=0.0.0.0 or "::"), that default would 403 every request whose Host header isn't
+    // literally "localhost"/"127.0.0.1"/"::1" -- including this app's own reverse-proxy/platform
+    // health checks, which connect over whatever internal address the platform uses (confirmed via
+    // `flyctl ssh console` on Fly.io: a request over the machine's own private IPv6 address got a
+    // 403 from this SDK-level check specifically, independent of and running before KARMA's own
+    // isAllowedHost/ALLOWED_HOSTS check below, which already handles this correctly). KARMA's own
+    // Host/Origin validation is the intended authority in production; this just stops the SDK's
+    // convenience default from shadowing it.
+    const app = createMcpExpressApp({ host: ENV.HTTP_HOST });
     // legacy: "reject" matches KARMA's existing fail-closed protocol stance
     // (protocolHeaderValidation already hard-rejects compat/legacy protocol
     // modes below) -- this endpoint speaks 2026-07-28 stateless only, native
