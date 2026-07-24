@@ -42,6 +42,29 @@ from this Blueprint shouldn't hit this. If you're seeing the app log
 on an older copy of this Blueprint), fix it in the dashboard: service → **Environment** → set both
 `HTTP_PORT` and `PORT` to `10000` → Save Changes triggers a redeploy.
 
+## If the port is already right and it *still* times out on health check
+
+Check the logs for `[KARMA] Skill event indexer started (backfill + live watch)`. Setting
+`MCP_SAFE_MODE=false` + `PHAROS_CONTRACT_ADDRESS` (both required for the trust oracle tool itself)
+also auto-starts KARMA's on-chain skill indexer (`src/index.ts`) — which `get_cross_chain_trust_score`
+does **not** use, since it reads chain state live per call
+(`src/plugins/trust_oracle.tool.ts`). Left at its default `KARMA_INDEXER_FROM_BLOCK=0`, the indexer
+backfills from genesis — tens of millions of blocks on Pharos Atlantic, thousands of sequential RPC
+calls — which can saturate a free-tier instance for the entire health-check window and starve
+Render's port detection, even though the app itself is up and listening on the right port the whole
+time. `render.yaml` pins `KARMA_INDEXER_FROM_BLOCK` near the current chain head to skip the
+historical scan (exact value doesn't matter — it only needs to avoid the full-history scan; bump it
+occasionally if it drifts far enough to matter again). Get the current value with:
+
+```bash
+curl -s -X POST https://atlantic.dplabs-internal.com \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}'
+# result is hex, e.g. "0x19a17e1" -> printf "%d\n" 0x19a17e1
+```
+
+then set `KARMA_INDEXER_FROM_BLOCK` to that decimal number in the dashboard's Environment tab.
+
 ## If you rename the service
 
 `ALLOWED_HOSTS` / `ALLOWED_ORIGINS` in `render.yaml` are hardcoded to

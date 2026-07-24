@@ -42,6 +42,12 @@ cd "$DEPLOY_DIR"
 if [ ! -f .env ]; then
   echo "==> Generating .env with fresh secrets..."
   MCP_API_KEY="$(openssl rand -hex 32)"
+  # MCP_SAFE_MODE=false + PHAROS_CONTRACT_ADDRESS auto-starts the on-chain skill indexer, which
+  # get_cross_chain_trust_score doesn't need (it reads chain state live per call). Left at its
+  # default of 0, it backfills from genesis -- tens of millions of blocks, thousands of RPC
+  # calls -- burning CPU/network for no benefit here. Pin it to the current head instead.
+  PHAROS_HEAD_HEX="$(curl -fsS -X POST https://atlantic.dplabs-internal.com -H 'Content-Type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}' | sed -n 's/.*"result":"\(0x[0-9a-fA-F]*\)".*/\1/p')"
+  KARMA_INDEXER_FROM_BLOCK="$([ -n "$PHAROS_HEAD_HEX" ] && printf "%d" "$PHAROS_HEAD_HEX" || echo 0)"
   cat > .env <<EOF
 PUBLIC_HOST=${PUBLIC_HOST}
 
@@ -73,6 +79,7 @@ QUOTA_DAILY_LIMIT=2000
 PHAROS_RPC_URL=https://atlantic.dplabs-internal.com
 PHAROS_CHAIN_ID=688689
 PHAROS_CONTRACT_ADDRESS=0xc6d5c146209e0833634bd33fafb9e65081b905ae
+KARMA_INDEXER_FROM_BLOCK=${KARMA_INDEXER_FROM_BLOCK}
 
 XLAYER_RPC_URL=https://testrpc.xlayer.tech
 XLAYER_CHAIN_ID=1952
