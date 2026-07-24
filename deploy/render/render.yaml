@@ -7,11 +7,18 @@ services:
     plan: free
     healthCheckPath: /health/liveness
     envVars:
-      # For Docker-runtime services, Render's health checker targets port 10000
-      # unless the Dockerfile has an EXPOSE directive (Containerfile has none) —
-      # it does NOT read this PORT var to pick the probed port. So the app must
-      # actually listen on 10000: HTTP_PORT is KARMA's own var (src/config/env.ts)
-      # and must match. Keep both in sync if you ever change either.
+      # Containerfile has `EXPOSE 10000`, which is what Render's Docker health checker actually
+      # targets -- it does NOT read this PORT var to pick the probed port (Render's own docs only
+      # promise "usually" auto-detecting a different port, which is exactly what caused a deploy-
+      # timeout incident here: see git history for `karma-trust-oracle`). So the app must actually
+      # listen on 10000: HTTP_PORT is KARMA's own var (src/config/env.ts) and must match. Keep
+      # PORT, HTTP_PORT, and the Containerfile's EXPOSE in sync if you ever change any of them.
+      #
+      # IMPORTANT: editing this file does NOT update an already-created service's live env vars --
+      # Render only applies render.yaml changes on an explicit Blueprint "Sync" (Dashboard ->
+      # Blueprints), not on a plain push/redeploy. After changing PORT/HTTP_PORT here, go sync the
+      # Blueprint (or edit the values directly under the service's Environment tab) and confirm the
+      # live values before assuming a fix took effect.
       - key: PORT
         value: "10000"
       - key: NODE_ENV
