@@ -20,5 +20,10 @@ COPY --from=builder --chown=node:node /app/package.json ./
 COPY --from=builder --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/dist ./dist
 
+# Without this, Render's Docker health checker falls back to a "usually" reliable auto-detected
+# port instead of a guaranteed one -- see deploy/render/render.yaml's HTTP_PORT/PORT comment for
+# the deploy-timeout incident this caused. Must match HTTP_PORT/PORT there.
+EXPOSE 10000
+
 USER node
 ENTRYPOINT ["node", "dist/index.js"]
