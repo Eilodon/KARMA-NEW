@@ -32,6 +32,16 @@ No credit card, no server to patch, no manual TLS setup — Render terminates HT
 That URL (`https://karma-trust-oracle.onrender.com`) is what goes into the OKX.AI ASP registration
 endpoint field.
 
+## If your first deploy hangs on "Waiting for internal health check"
+
+Render's Docker-runtime health checker probes port `10000` by default — it does not read the
+`PORT` env var to decide which port to probe, and `Containerfile` has no `EXPOSE` directive to tell
+it otherwise. `render.yaml` already sets `HTTP_PORT=10000`/`PORT=10000` to match, so a fresh deploy
+from this Blueprint shouldn't hit this. If you're seeing the app log
+`Server listening on HTTP 0.0.0.0:3333` while the health check waits on port `10000` (i.e. you're
+on an older copy of this Blueprint), fix it in the dashboard: service → **Environment** → set both
+`HTTP_PORT` and `PORT` to `10000` → Save Changes triggers a redeploy.
+
 ## If you rename the service
 
 `ALLOWED_HOSTS` / `ALLOWED_ORIGINS` in `render.yaml` are hardcoded to
