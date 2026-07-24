@@ -1,0 +1,70 @@
+app = "karma-trust-oracle"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Containerfile"
+
+[env]
+  NODE_ENV = "development"
+  TRANSPORT_DRIVER = "http"
+  HTTP_HOST = "0.0.0.0"
+  HTTP_PORT = "3333"
+  STORAGE_DRIVER = "fs"
+  TELEMETRY_DRIVER = "stdout"
+  MCP_PROJECT_ID = "KARMA"
+  MCP_TENANT_ID = "tenant_public"
+
+  MCP_AUTH_MODE = "api_key"
+  # MCP_API_KEY is a secret -- set it with `flyctl secrets set MCP_API_KEY=...`, never here.
+
+  # Must match this app's *.fly.dev hostname. If `karma-trust-oracle` is already taken and you
+  # picked a different app name above, update both of these to match before deploying.
+  ALLOWED_HOSTS = "karma-trust-oracle.fly.dev"
+  ALLOWED_ORIGINS = "https://karma-trust-oracle.fly.dev"
+
+  # Minimal plugin set: only the free trust-oracle tool + the always-on system tool. No
+  # karma.tool.ts (skill economy), no Redis, no indexer beyond the pinned-block one below --
+  # get_cross_chain_trust_score reads chain state per call and needs none of that
+  # (src/plugins/trust_oracle.tool.ts).
+  MCP_SAFE_MODE = "false"
+  MCP_PLUGIN_ISOLATION_MODE = "policy"
+  MCP_PLUGIN_ALLOWLIST = "system.tool.js,trust_oracle.tool.js"
+
+  ENABLE_RATE_LIMIT = "true"
+  RATE_LIMIT_MAX_REQUESTS = "60"
+  RATE_LIMIT_WINDOW_MS = "60000"
+  ENABLE_QUOTA = "true"
+  QUOTA_DAILY_LIMIT = "2000"
+
+  # Already-deployed contracts (see main README's "Live deployments" table).
+  PHAROS_RPC_URL = "https://atlantic.dplabs-internal.com"
+  PHAROS_CHAIN_ID = "688689"
+  PHAROS_CONTRACT_ADDRESS = "0xc6d5c146209e0833634bd33fafb9e65081b905ae"
+  # MCP_SAFE_MODE=false + PHAROS_CONTRACT_ADDRESS also auto-starts the on-chain skill indexer
+  # (src/index.ts), which the trust oracle tool doesn't use. Left at the default (0) it backfills
+  # from genesis -- tens of millions of blocks, thousands of RPC calls -- for no benefit here, and
+  # burned an entire Render free-tier deploy window before this was found. Pin it near the current
+  # chain head instead (exact value doesn't matter); see deploy/fly/README.md to refresh it.
+  KARMA_INDEXER_FROM_BLOCK = "26875873"
+
+  XLAYER_RPC_URL = "https://testrpc.xlayer.tech"
+  XLAYER_CHAIN_ID = "1952"
+  XLAYER_CONTRACT_ADDRESS = "0xBF285628869c2EFaf6731F8503B39B7130474Cd2"
+
+[http_service]
+  internal_port = 3333
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "15s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health/liveness"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
