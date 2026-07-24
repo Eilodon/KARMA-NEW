@@ -72,6 +72,16 @@ services:
         value: "688689"
       - key: PHAROS_CONTRACT_ADDRESS
         value: "0xc6d5c146209e0833634bd33fafb9e65081b905ae"
+      # Setting MCP_SAFE_MODE=false + PHAROS_CONTRACT_ADDRESS also auto-starts the on-chain skill
+      # indexer (src/index.ts), which get_cross_chain_trust_score does NOT need (it reads chain
+      # state live per call, per src/plugins/trust_oracle.tool.ts). Left at its default
+      # KARMA_INDEXER_FROM_BLOCK=0, it backfills from genesis -- ~26.9M blocks / 2000-block chunks
+      # is ~13k sequential RPC calls, easily saturating a free-tier instance for the entire health
+      # check window and starving Render's port detection. Pin it near the current head instead
+      # (exact value doesn't matter, it only needs to avoid the full-history scan) -- bump this
+      # occasionally if it ever drifts far enough to matter again.
+      - key: KARMA_INDEXER_FROM_BLOCK
+        value: "26875873"
 
       - key: XLAYER_RPC_URL
         value: https://testrpc.xlayer.tech
