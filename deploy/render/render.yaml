@@ -7,10 +7,13 @@ services:
     plan: free
     healthCheckPath: /health/liveness
     envVars:
-      # Render routes to whatever port PORT is set to; HTTP_PORT is KARMA's own var
-      # (src/config/env.ts) — both must match.
+      # For Docker-runtime services, Render's health checker targets port 10000
+      # unless the Dockerfile has an EXPOSE directive (Containerfile has none) —
+      # it does NOT read this PORT var to pick the probed port. So the app must
+      # actually listen on 10000: HTTP_PORT is KARMA's own var (src/config/env.ts)
+      # and must match. Keep both in sync if you ever change either.
       - key: PORT
-        value: "3333"
+        value: "10000"
       - key: NODE_ENV
         value: development
       - key: TRANSPORT_DRIVER
@@ -18,7 +21,7 @@ services:
       - key: HTTP_HOST
         value: 0.0.0.0
       - key: HTTP_PORT
-        value: "3333"
+        value: "10000"
       - key: STORAGE_DRIVER
         value: fs
       - key: TELEMETRY_DRIVER
