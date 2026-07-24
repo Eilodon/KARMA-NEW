@@ -149,6 +149,14 @@ async function main() {
 
     app.disable("x-powered-by");
 
+    // TEMP DIAGNOSTIC (remove once the Render health-check timeout is root-caused): log every
+    // inbound request before any gate runs, so we can see whether Render's internal health check
+    // even reaches Express, and if so what Host/method/path it actually sends.
+    app.use((req, res, next) => {
+      console.error(`[KARMA][diag] ${req.method} ${req.url} host=${req.headers.host ?? "<none>"} ua=${req.headers["user-agent"] ?? "<none>"}`);
+      next();
+    });
+
     app.use((req, res, next) => {
       if (!isAllowedHost(req.headers.host, allowedHosts)) {
         res.status(403).json({ error: "Invalid Host" });
