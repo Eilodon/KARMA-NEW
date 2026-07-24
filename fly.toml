@@ -7,7 +7,13 @@ primary_region = "sin"
 [env]
   NODE_ENV = "development"
   TRANSPORT_DRIVER = "http"
-  HTTP_HOST = "0.0.0.0"
+  # "::" (not "0.0.0.0"): Fly machines are reachable over private IPv6 (6PN) primarily -- this
+  # machine has no private IPv4 address at all (`flyctl machine list` shows only an fdaa:... IPv6
+  # address). Node's net.Server binds IPv4-only on "0.0.0.0", so Fly's health checker connecting
+  # over IPv6 got "connection refused" even though the app was up and reachable via IPv4 loopback
+  # (confirmed via `flyctl ssh console` + `wget 127.0.0.1:3333`, which returned 200 the whole time).
+  # "::" binds dual-stack on Linux by default, covering both.
+  HTTP_HOST = "::"
   HTTP_PORT = "3333"
   STORAGE_DRIVER = "fs"
   TELEMETRY_DRIVER = "stdout"
