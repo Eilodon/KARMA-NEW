@@ -42,10 +42,15 @@ start.
    `fly.toml`: update `app = "..."` **and** `ALLOWED_HOSTS` / `ALLOWED_ORIGINS` under `[env]` to
    match `<your-app-name>.fly.dev` — KARMA's HTTP layer 403s any request whose Host header isn't on
    that allowlist (`src/index.ts`'s `isAllowedHost`), so these three must always agree.
-5. **Set the API key secret** (never put this in `fly.toml` — it's committed to the repo):
-   ```bash
-   flyctl secrets set MCP_API_KEY=$(openssl rand -hex 32)
-   ```
+5. **No secret to set.** `fly.toml` runs `MCP_AUTH_MODE = "none"` — the endpoint really is
+   unauthenticated, matching the README's "No signup, no payment, one call." An earlier version of
+   this config used `MCP_AUTH_MODE = "api_key"` with a `flyctl secrets set MCP_API_KEY=...` step;
+   that 401'd every real caller (including OKX.AI's own review — there's no field in ASP
+   registration to hand it a key), so it's gone. If you fork this for a tool that *does* need auth,
+   switch back to `api_key`/`jwt`/`oidc_jwks` — `none` is only safe when every tool in
+   `MCP_PLUGIN_ALLOWLIST` has zero `requiredScopes` (see `src/security/context.ts`'s
+   `resolvePublicRequestContext`), which is true here since this deploy only serves
+   `get_cross_chain_trust_score` + the system tool.
 6. **Deploy** from the repo root:
    ```bash
    flyctl deploy
@@ -63,6 +68,13 @@ That URL is what goes into the OKX.AI ASP registration endpoint field.
 **Confirmed live:** `https://karma-trust-oracle.fly.dev/health/liveness` returns
 `{"status":"alive","version":"1.0.0"}`, and `/.well-known/mcp-server-card` lists
 `get_cross_chain_trust_score` correctly.
+
+**Known gap, fixed in code but not yet redeployed:** the machine currently running still has the
+old `MCP_AUTH_MODE = "api_key"` config baked in — `curl -X POST .../mcp -d
+'{"jsonrpc":"2.0","id":1,"method":"tools/list"}'` returns `401 {"error":"Unauthorized"}` until
+someone with `flyctl` access runs `flyctl deploy` again to pick up this file's current
+`MCP_AUTH_MODE = "none"`. **Do this before registering the ASP** — OKX's review will call the tool
+directly, and a "free" listing that 401s isn't reviewable.
 
 ## If the health check never goes green
 

@@ -59,12 +59,22 @@ or reviewer can call it with zero setup on their end. The paid x402 code
 (`src/plugins/x402_xlayer.ts`, `@x402/evm`) is already built and tested — it's evidence of
 monetization depth in the repo, it just isn't what's switched on for the live listing.
 
-Point your agent at this KARMA server (run `pnpm dev` first so the MCP endpoint is live) and its
-`get_cross_chain_trust_score` tool:
+The endpoint is deployed for real now — use `https://karma-trust-oracle.fly.dev`, not
+`pnpm dev`/localhost (OKX.AI rejects localhost/private-IP endpoints outright per
+`.claude/skills/okx-ai/references/identity-register.md` §6).
 
+- [ ] **Blocking precondition, found 24/7:** the deployed machine still 401s every real tool call
+      (`MCP_AUTH_MODE=api_key` with a secret nobody but the operator has — contradicts the README's
+      "No signup, no payment, one call"). Fixed in code (`MCP_AUTH_MODE=none`,
+      `src/security/context.ts`'s `resolvePublicRequestContext`, gated behind the explicit
+      `MCP_ALLOW_UNAUTHENTICATED_HTTP=true` risk waiver in `src/config/env.ts`) but **not yet
+      redeployed** — someone with `flyctl` access must run `flyctl deploy` from repo root before
+      registering. Verify with `curl -X POST https://karma-trust-oracle.fly.dev/mcp -d
+      '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'` — must NOT be `401`. See
+      `deploy/fly/README.md`.
 - [ ] `Help me register an A2MCP ASP on OKX.AI using OKX Agent Identity from Onchain OS` — describe
-      it as: KARMA Cross-Chain Trust Oracle, **free**, endpoint = this server's
-      `get_cross_chain_trust_score` MCP tool.
+      it as: KARMA Cross-Chain Trust Oracle, **free**, endpoint =
+      `https://karma-trust-oracle.fly.dev`'s `get_cross_chain_trust_score` MCP tool.
 - [ ] `Help me list my ASP on OKX.AI using Onchain OS`
 - [ ] **This is the step that gates the whole submission.** OKX review can take time — start this
       several days before 27/7, watch for the approval notice, and if it's rejected, fix and

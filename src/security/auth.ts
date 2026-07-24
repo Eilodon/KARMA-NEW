@@ -1,7 +1,7 @@
 import { jwtVerify, createRemoteJWKSet, type JWTVerifyGetKey } from "jose";
 import { timingSafeEqual } from "node:crypto";
 import { ENV } from "../config/env.js";
-import { resolveHttpRequestContext, resolveJwtRequestContext, resolveOidcRequestContext, type RequestContext } from "./context.js";
+import { resolveHttpRequestContext, resolveJwtRequestContext, resolveOidcRequestContext, resolvePublicRequestContext, type RequestContext } from "./context.js";
 
 function isAuthorizedApiKey(received: unknown): boolean {
   if (typeof received !== "string") return false;
@@ -72,6 +72,14 @@ export function resetOidcJwksCacheForTests(): void {
 }
 
 export async function authenticateHttpRequest(headers: Record<string, string | string[] | undefined>): Promise<RequestContext> {
+  // No shared secret at all -- every caller gets the same anonymous identity. Only
+  // safe for deployments whose entire plugin allowlist has no requiredScopes (see
+  // resolvePublicRequestContext); ENV validation below refuses this in production
+  // unless the operator has explicitly reviewed that.
+  if (ENV.MCP_AUTH_MODE === "none") {
+    return resolvePublicRequestContext(headers);
+  }
+
   if (ENV.MCP_AUTH_MODE === "api_key") {
     if (!isAuthorizedApiKey(headers["x-api-key"])) {
       throw new Error("Unauthorized");

@@ -11,6 +11,7 @@ import {
   resolveHttpRequestContext,
   resolveJwtRequestContext,
   resolveOidcRequestContext,
+  resolvePublicRequestContext,
 } from "../security/context.js";
 
 describe("request context security boundaries", () => {
@@ -35,6 +36,24 @@ describe("request context security boundaries", () => {
       scopes: ["mcp:invoke"],
       requestId: "req-safe",
       authType: "api-key",
+    });
+  });
+
+  test("public context (MCP_AUTH_MODE=none) collapses every caller onto one anonymous identity and ignores caller-supplied identity headers", () => {
+    const ctx = resolvePublicRequestContext({
+      "x-mcp-tenant-id": "attacker-tenant",
+      "x-mcp-client-id": "attacker-client",
+      "x-mcp-scopes": "admin",
+      "x-request-id": "req-public",
+    });
+
+    expect(ctx).toMatchObject({
+      tenantId: "tenant_default",
+      userId: "anonymous",
+      clientId: "anonymous-client",
+      scopes: [],
+      requestId: "req-public",
+      authType: "public",
     });
   });
 
