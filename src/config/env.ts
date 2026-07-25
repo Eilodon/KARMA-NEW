@@ -10,8 +10,12 @@ const EnvSchema = z.object({
   TRANSPORT_DRIVER: z.enum(["stdio", "http"]).default("stdio"),
   HTTP_HOST: z.string().default("127.0.0.1"),
   HTTP_PORT: z.number().int().min(1).max(65535).default(3333),
-  MCP_AUTH_MODE: z.enum(["api_key", "jwt", "oidc_jwks"]).default("api_key"),
+  MCP_AUTH_MODE: z.enum(["api_key", "jwt", "oidc_jwks", "none"]).default("api_key"),
   MCP_API_KEY: z.string().min(32).optional(),
+  // Explicit risk waiver for MCP_AUTH_MODE=none: every caller gets the same anonymous
+  // identity, no secret at all. Only for a deployment whose entire plugin allowlist has
+  // zero requiredScopes (e.g. a single free, no-signup ASP tool) -- see resolvePublicRequestContext.
+  MCP_ALLOW_UNAUTHENTICATED_HTTP: z.boolean().default(false),
   MCP_JWT_SECRET: z.string().min(32).optional(),
   MCP_JWT_ISSUER: z.string().optional(),
   MCP_JWT_AUDIENCE: z.string().optional(),
@@ -193,6 +197,7 @@ function loadEnv() {
     ENABLE_QUOTA: parseSafeBoolean(process.env.ENABLE_QUOTA),
     QUOTA_DAILY_LIMIT: parseIntEnv(process.env.QUOTA_DAILY_LIMIT),
     MCP_ALLOW_UNLIMITED_HTTP: parseSafeBoolean(process.env.MCP_ALLOW_UNLIMITED_HTTP),
+    MCP_ALLOW_UNAUTHENTICATED_HTTP: parseSafeBoolean(process.env.MCP_ALLOW_UNAUTHENTICATED_HTTP),
     MCP_ENCRYPTION_KEY: process.env.MCP_ENCRYPTION_KEY,
     MCP_ALLOW_LEGACY_SHA256_KDF: parseSafeBoolean(process.env.MCP_ALLOW_LEGACY_SHA256_KDF),
     MCP_SAFE_MODE: parseSafeBoolean(process.env.MCP_SAFE_MODE),
@@ -302,6 +307,11 @@ function loadEnv() {
 
     if (env.MCP_AUTH_MODE === "api_key" && (!env.MCP_API_KEY || env.MCP_API_KEY.trim().length < 32)) {
       console.error("FATAL: MCP_API_KEY is required when TRANSPORT_DRIVER=http");
+      process.exit(1);
+    }
+
+    if (env.MCP_AUTH_MODE === "none" && !env.MCP_ALLOW_UNAUTHENTICATED_HTTP) {
+      console.error("FATAL: MCP_AUTH_MODE=none requires MCP_ALLOW_UNAUTHENTICATED_HTTP=true as an explicit risk waiver -- every tool in MCP_PLUGIN_ALLOWLIST must have zero requiredScopes, since every caller collapses onto one anonymous identity.");
       process.exit(1);
     }
 

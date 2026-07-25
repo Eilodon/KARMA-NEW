@@ -269,6 +269,43 @@ describe("env validation", () => {
     expect(mod.ENV.MCP_AUTH_MODE).toBe("oidc_jwks");
   });
 
+  // ── MCP_AUTH_MODE=none ──────────────────────────────────────────────────────
+
+  test("requires MCP_ALLOW_UNAUTHENTICATED_HTTP=true when MCP_AUTH_MODE=none and exits otherwise", async () => {
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("process.exit:1");
+    }) as never);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(
+      importEnvWith({
+        TRANSPORT_DRIVER: "http",
+        MCP_AUTH_MODE: "none",
+        ALLOWED_ORIGINS: "https://app.example.com",
+        ALLOWED_HOSTS: "app.example.com",
+        MCP_IDEMPOTENCY_RESULT_TTL_SECONDS: "3600",
+      }),
+    ).rejects.toThrow("process.exit:1");
+
+    expect(exit).toHaveBeenCalledWith(1);
+  });
+
+  test("MCP_AUTH_MODE=none with the explicit risk waiver skips MCP_API_KEY/MCP_JWT_SECRET requirements", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const mod = await importEnvWith({
+      TRANSPORT_DRIVER: "http",
+      MCP_AUTH_MODE: "none",
+      MCP_ALLOW_UNAUTHENTICATED_HTTP: "true",
+      ALLOWED_ORIGINS: "https://app.example.com",
+      ALLOWED_HOSTS: "app.example.com",
+      MCP_IDEMPOTENCY_RESULT_TTL_SECONDS: "3600",
+    });
+
+    expect(mod.ENV.MCP_AUTH_MODE).toBe("none");
+    expect(mod.ENV.MCP_ALLOW_UNAUTHENTICATED_HTTP).toBe(true);
+  });
+
   test("MCP_AUTH_MODE rejects unknown value 'oauth2' and exits", async () => {
     const exit = vi.spyOn(process, "exit").mockImplementation((() => {
       throw new Error("process.exit:1");

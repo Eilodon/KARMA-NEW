@@ -20,8 +20,15 @@ primary_region = "sin"
   MCP_PROJECT_ID = "KARMA"
   MCP_TENANT_ID = "tenant_public"
 
-  MCP_AUTH_MODE = "api_key"
-  # MCP_API_KEY is a secret -- set it with `flyctl secrets set MCP_API_KEY=...`, never here.
+  # No shared secret: this deployment serves exactly one free, no-signup tool
+  # (get_cross_chain_trust_score, zero requiredScopes) -- README promises "No signup, no
+  # payment, one call", and OKX.AI's A2MCP review calls the endpoint directly with no way
+  # to supply a key. MCP_AUTH_MODE=api_key would 401 every real caller including OKX's own
+  # review, which is what this deployment did for its first day live (confirmed via curl:
+  # {"error":"Unauthorized"} on POST /mcp). MCP_ALLOW_UNAUTHENTICATED_HTTP=true is the
+  # explicit risk waiver src/config/env.ts requires for MCP_AUTH_MODE=none.
+  MCP_AUTH_MODE = "none"
+  MCP_ALLOW_UNAUTHENTICATED_HTTP = "true"
 
   # Must include this app's *.fly.dev hostname (if `karma-trust-oracle` is already taken and you
   # picked a different app name above, update it here too) PLUS localhost/127.0.0.1 variants --

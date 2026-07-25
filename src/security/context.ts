@@ -7,7 +7,7 @@ export interface RequestContext {
   clientId: string;
   scopes: string[];
   requestId: string;
-  authType: "stdio" | "api-key" | "jwt" | "oidc" | "gateway";
+  authType: "stdio" | "api-key" | "jwt" | "oidc" | "gateway" | "public";
 }
 
 const ID_PATTERN = /^[a-zA-Z0-9_.:@-]{1,128}$/;
@@ -88,6 +88,22 @@ export function resolveHttpRequestContext(headers: Record<string, string | strin
     // B-7.2 fix: "gateway" authType lets validateScopes enforce the scopes the gateway
     // injected via x-mcp-scopes, instead of bypassing them like "api-key" would.
     authType: "gateway",
+  };
+}
+
+// MCP_AUTH_MODE=none: for tools with no requiredScopes (validateScopes bypasses
+// non-"stdio" authTypes with an empty required list) that are meant to be called by
+// literally anyone, no shared secret at all -- e.g. a free, no-signup ASP listing.
+// Every caller collapses onto the same identity, so ENABLE_RATE_LIMIT is the only
+// abuse control; this mode must never be paired with a tool that has requiredScopes.
+export function resolvePublicRequestContext(headers: Record<string, string | string[] | undefined>): RequestContext {
+  return {
+    tenantId: normalizeId(ENV.MCP_TENANT_ID, "tenant_public"),
+    userId: "anonymous",
+    clientId: "anonymous-client",
+    scopes: [],
+    requestId: normalizeId(headerValue(headers, "x-request-id"), `req-${Date.now()}`),
+    authType: "public",
   };
 }
 
