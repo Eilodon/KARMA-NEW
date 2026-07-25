@@ -63,15 +63,34 @@ The endpoint is deployed for real now — use `https://karma-trust-oracle.fly.de
 `pnpm dev`/localhost (OKX.AI rejects localhost/private-IP endpoints outright per
 `.claude/skills/okx-ai/references/identity-register.md` §6).
 
-- [ ] **Blocking precondition, found 24/7:** the deployed machine still 401s every real tool call
-      (`MCP_AUTH_MODE=api_key` with a secret nobody but the operator has — contradicts the README's
-      "No signup, no payment, one call"). Fixed in code (`MCP_AUTH_MODE=none`,
-      `src/security/context.ts`'s `resolvePublicRequestContext`, gated behind the explicit
-      `MCP_ALLOW_UNAUTHENTICATED_HTTP=true` risk waiver in `src/config/env.ts`) but **not yet
-      redeployed** — someone with `flyctl` access must run `flyctl deploy` from repo root before
-      registering. Verify with `curl -X POST https://karma-trust-oracle.fly.dev/mcp -d
-      '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'` — must NOT be `401`. See
-      `deploy/fly/README.md`.
+- [x] **401-on-every-call precondition — confirmed fixed and live.** Re-verified in-session
+      (25/7): `curl -X POST https://karma-trust-oracle.fly.dev/mcp -d
+      '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'` no longer 401s — `MCP_AUTH_MODE=none` is
+      live on the deployed machine. (It now answers with a different, unrelated error — see the
+      next item — so don't read "not 401" alone as "fully callable" until that one is deployed too.)
+- [ ] **New blocking precondition, found 25/7 — fixed in code, NOT YET REDEPLOYED:** the live
+      endpoint rejects a **plain, standard MCP `initialize`** call outright with `-32022 Unsupported
+      protocol version`, even though the request named a real, supported version. Root cause:
+      `src/index.ts` had `createMcpHandler(..., { legacy: "reject" })` — "modern-only strict",
+      refusing the older/legacy MCP handshake entirely — combined with `protocolHeaderValidation`
+      (`src/middlewares/protocol_header.ts`) hard-requiring KARMA-invented `Mcp-Method`/`Mcp-Name`
+      HTTP headers on every request. Any real-world MCP client that doesn't already speak the
+      newest, still-beta 2026-07-28 envelope (almost certainly including OKX.AI's own A2MCP review
+      bot) would fail at the handshake and never reach the tool at all — silently invalidating the
+      submission regardless of how correct `get_cross_chain_trust_score` itself is.
+      Fixed: `legacy: "stateless"` (the SDK's own default — serves both the legacy handshake and
+      the modern envelope) + made the two custom headers optional/cross-checked-only-when-present
+      instead of mandatory. Verified locally end-to-end: a plain `initialize` (protocolVersion
+      `2025-06-18`, no custom headers) → `tools/list` → `tools/call get_cross_chain_trust_score`
+      all succeed now against a local instance running the fixed code. **Still not live** —
+      someone with `flyctl` access must run `flyctl deploy` from repo root to ship this fix before
+      registering. Re-verify after deploying:
+      ```
+      curl -X POST https://karma-trust-oracle.fly.dev/mcp \
+        -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+        -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"0.0.1"}}}'
+      ```
+      must return a `result` (not a `-32022`/`-32020` error). See `deploy/fly/README.md`.
 - [ ] `Help me register an A2MCP ASP on OKX.AI using OKX Agent Identity from Onchain OS` — describe
       it as: KARMA Cross-Chain Trust Oracle, **free**, endpoint =
       `https://karma-trust-oracle.fly.dev`'s `get_cross_chain_trust_score` MCP tool.

@@ -195,10 +195,14 @@ describe("HTTP Resources/Prompts conformance (DEBT-008)", () => {
     expect(Array.isArray(parsed.items)).toBe(true);
   });
 
-  test("missing Mcp-Name on resources/read is rejected with -32020 and mentions the actual method", async () => {
+  test("missing Mcp-Name on resources/read (modern envelope) is rejected with -32020", async () => {
     harness = await createHarness();
     // harness.rpc() auto-fills Mcp-Name for resources/read, so this one request is built by hand
     // to genuinely omit the header (not send an empty value, which is a different validation branch).
+    // KARMA's own protocolHeaderValidation middleware no longer requires Mcp-Name (it's optional,
+    // cross-checked only when present -- see that middleware's doc comment for why); this request
+    // still 400s because it opts into the modern 2026-07-28 envelope (params._meta), and the SDK's
+    // own modern-era handling independently requires Mcp-Name for resources/read at that layer.
     const response = await fetch(`${harness.baseUrl}/mcp`, {
       method: "POST",
       headers: {
@@ -217,7 +221,7 @@ describe("HTTP Resources/Prompts conformance (DEBT-008)", () => {
 
     expect(res.result).toBeUndefined();
     expect(res.error.code).toBe(-32020);
-    expect(res.error.message).toMatch(/resources\/read/);
+    expect(res.error.message).toMatch(/Mcp-Name/);
   });
 
   test("Mcp-Name mirrors body.params.uri for resources/read — a mismatched value is rejected", async () => {

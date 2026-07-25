@@ -148,11 +148,18 @@ async function main() {
     // Host/Origin validation is the intended authority in production; this just stops the SDK's
     // convenience default from shadowing it.
     const app = createMcpExpressApp({ host: ENV.HTTP_HOST });
-    // legacy: "reject" matches KARMA's existing fail-closed protocol stance
-    // (protocolHeaderValidation already hard-rejects compat/legacy protocol
-    // modes below) -- this endpoint speaks 2026-07-28 stateless only, native
-    // to the transport now instead of self-declared in server/discover.
-    mcpHandler = createMcpHandler(() => runtime.createEphemeralServer(), { legacy: "reject" });
+    // legacy: "stateless" (the SDK default) -- serve BOTH the 2025-era legacy
+    // handshake and the 2026-07-28 modern envelope. An earlier version of this
+    // endpoint used `legacy: "reject"` (modern-only strict), which 400s any
+    // client that doesn't already speak the brand-new, still-beta protocol
+    // revision on every single request, including `initialize` -- verified
+    // live: a plain MCP `initialize` call against this endpoint got rejected
+    // with -32022 Unsupported protocol version. This endpoint's one real
+    // caller in the near term is OKX.AI's A2MCP review bot plus whatever
+    // agent client calls it after listing -- neither is guaranteed to speak
+    // 2026-07-28 yet, so rejecting the legacy handshake risks the call (and
+    // the hackathon review) outright instead of degrading gracefully.
+    mcpHandler = createMcpHandler(() => runtime.createEphemeralServer(), { legacy: "stateless" });
     const mcpNodeHandler = toNodeHandler(mcpHandler);
     const allowedOrigins = new Set(parseList(ENV.ALLOWED_ORIGINS));
     const allowedHosts = new Set(parseList(ENV.ALLOWED_HOSTS).map(h => h.toLowerCase()));

@@ -1,5 +1,6 @@
 /**
- * Tests for final rc2026 protocol-header validation middleware.
+ * Tests for the protocol-header validation middleware (Mcp-Method / Mcp-Name are optional,
+ * cross-checked only when present -- see the middleware's own doc comment for why).
  */
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type { NextFunction, Request, Response } from "express";
@@ -32,21 +33,18 @@ function makeRes() {
   return res as unknown as Response & { _status: number; _body: unknown };
 }
 
-// ── rc2026 mode ───────────────────────────────────────────────────────────────
+// ── header-optional mode ────────────────────────────────────────────────────
 
-describe("protocolHeaderValidation – rc2026 final mode", () => {
+describe("protocolHeaderValidation – headers optional, cross-checked when present", () => {
   afterEach(() => { vi.unstubAllEnvs(); });
 
-  test("missing Mcp-Method header → -32020 (required in rc2026)", async () => {
+  test("missing Mcp-Method header → passes through (not required)", async () => {
     const mw = await importMiddlewareWithMode();
     const next = vi.fn() as unknown as NextFunction;
     const req = makeReq({}, { method: "tools/call" });
     const res = makeRes();
     mw(req, res, next);
-    expect(next).not.toHaveBeenCalled();
-    expect(res._status).toBe(400);
-    const body = res._body as { error: { code: number } };
-    expect(body.error.code).toBe(-32020);
+    expect(next).toHaveBeenCalledOnce();
   });
 
   test("Mcp-Method present and matching for non-named method → passes", async () => {
@@ -61,7 +59,7 @@ describe("protocolHeaderValidation – rc2026 final mode", () => {
     expect(next).toHaveBeenCalledOnce();
   });
 
-  test("tools/call missing Mcp-Name header → -32020 (required in rc2026)", async () => {
+  test("tools/call with Mcp-Method but no Mcp-Name header → passes through (Mcp-Name not required)", async () => {
     const mw = await importMiddlewareWithMode();
     const next = vi.fn() as unknown as NextFunction;
     const req = makeReq(
@@ -70,10 +68,7 @@ describe("protocolHeaderValidation – rc2026 final mode", () => {
     );
     const res = makeRes();
     mw(req, res, next);
-    expect(next).not.toHaveBeenCalled();
-    expect(res._status).toBe(400);
-    const body = res._body as { error: { code: number } };
-    expect(body.error.code).toBe(-32020);
+    expect(next).toHaveBeenCalledOnce();
   });
 
   test("Mcp-Method present but mismatched → -32020", async () => {
@@ -150,7 +145,9 @@ describe("protocolHeaderValidation – rc2026 final mode", () => {
   test("jsonrpc error shape is well-formed", async () => {
     const mw = await importMiddlewareWithMode();
     const next = vi.fn() as unknown as NextFunction;
-    const req = makeReq({}, { method: "tools/call" });
+    // A mismatched Mcp-Method header is still rejected (headers are optional, but must be
+    // truthful when present) -- use that to exercise the error-shape contract.
+    const req = makeReq({ "mcp-method": "tools/call" }, { method: "tools/list" });
     const res = makeRes();
     mw(req, res, next);
     const body = res._body as { jsonrpc: string; error: { code: number; message: string }; id: null };
