@@ -68,38 +68,54 @@ The endpoint is deployed for real now — use `https://karma-trust-oracle.fly.de
       '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'` no longer 401s — `MCP_AUTH_MODE=none` is
       live on the deployed machine. (It now answers with a different, unrelated error — see the
       next item — so don't read "not 401" alone as "fully callable" until that one is deployed too.)
-- [ ] **New blocking precondition, found 25/7 — fixed in code, NOT YET REDEPLOYED:** the live
-      endpoint rejects a **plain, standard MCP `initialize`** call outright with `-32022 Unsupported
-      protocol version`, even though the request named a real, supported version. Root cause:
-      `src/index.ts` had `createMcpHandler(..., { legacy: "reject" })` — "modern-only strict",
-      refusing the older/legacy MCP handshake entirely — combined with `protocolHeaderValidation`
-      (`src/middlewares/protocol_header.ts`) hard-requiring KARMA-invented `Mcp-Method`/`Mcp-Name`
-      HTTP headers on every request. Any real-world MCP client that doesn't already speak the
-      newest, still-beta 2026-07-28 envelope (almost certainly including OKX.AI's own A2MCP review
-      bot) would fail at the handshake and never reach the tool at all — silently invalidating the
-      submission regardless of how correct `get_cross_chain_trust_score` itself is.
-      Fixed: `legacy: "stateless"` (the SDK's own default — serves both the legacy handshake and
-      the modern envelope) + made the two custom headers optional/cross-checked-only-when-present
-      instead of mandatory. Verified locally end-to-end: a plain `initialize` (protocolVersion
-      `2025-06-18`, no custom headers) → `tools/list` → `tools/call get_cross_chain_trust_score`
-      all succeed now against a local instance running the fixed code. **Still not live** —
-      someone with `flyctl` access must run `flyctl deploy` from repo root to ship this fix before
-      registering. Re-verify after deploying:
+- [x] **`legacy: "reject"` protocol-rejection bug — fixed in code AND deployed live (26/7).** Root
+      cause: `src/index.ts` had `createMcpHandler(..., { legacy: "reject" })` — "modern-only
+      strict", refusing the older/legacy MCP handshake entirely — combined with
+      `protocolHeaderValidation` (`src/middlewares/protocol_header.ts`) hard-requiring
+      KARMA-invented `Mcp-Method`/`Mcp-Name` HTTP headers on every request. Any real-world MCP
+      client that doesn't already speak the newest, still-beta 2026-07-28 envelope (almost
+      certainly including OKX.AI's own A2MCP review bot) would fail at the handshake and never
+      reach the tool at all. Fixed: `legacy: "stateless"` (the SDK default, serves both eras) +
+      made the two custom headers optional/cross-checked-only-when-present.
+      **Deployment note for future sessions:** `flyctl deploy`'s default remote builder uses gRPC,
+      which this sandbox's egress proxy does not support (hangs, then `deadline_exceeded` /
+      `authentication handshake failed`) — do not retry it blindly. Workaround that worked: build
+      locally with `docker build --network host --build-arg HTTPS_PROXY=http://127.0.0.1:40345
+      --build-arg HTTP_PROXY=http://127.0.0.1:40345 -t registry.fly.io/karma-trust-oracle:<tag> -f
+      Containerfile .` (the `--build-arg` proxy vars are needed even with `--network host`, because
+      Docker build containers don't inherit the host's `HTTPS_PROXY` env var automatically — without
+      them, `corepack prepare pnpm` fails fetching from registry.npmjs.org), then `flyctl auth
+      docker && docker push registry.fly.io/karma-trust-oracle:<tag> && flyctl deploy --image
+      registry.fly.io/karma-trust-oracle:<tag>` (skips flyctl's own build step entirely).
+      **Verified live (26/7)** — plain `initialize` (protocolVersion `2025-06-18`, no custom
+      headers) → `tools/list` → `tools/call get_cross_chain_trust_score` all succeed against
+      `https://karma-trust-oracle.fly.dev` for real, from outside the deploy session:
       ```
       curl -X POST https://karma-trust-oracle.fly.dev/mcp \
         -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
         -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"0.0.1"}}}'
       ```
-      must return a `result` (not a `-32022`/`-32020` error). See `deploy/fly/README.md`.
-- [ ] `Help me register an A2MCP ASP on OKX.AI using OKX Agent Identity from Onchain OS` — describe
-      it as: KARMA Cross-Chain Trust Oracle, **free**, endpoint =
-      `https://karma-trust-oracle.fly.dev`'s `get_cross_chain_trust_score` MCP tool.
-- [ ] `Help me list my ASP on OKX.AI using Onchain OS`
-- [ ] **This is the step that gates the whole submission.** OKX review can take time — start this
-      several days before 27/7, watch for the approval notice, and if it's rejected, fix and
-      resubmit immediately rather than waiting. An ASP that "hasn't been reviewed yet" is fine to
-      keep working on internally, but per the official rule above, it is **not** a valid hackathon
-      submission until it's approved and live.
+      returns a `result` (not a `-32022`/`-32020` error).
+      **Separate, lower-priority finding from the same verification pass:** `tools/call
+      get_cross_chain_trust_score` against the X Layer deployer address
+      (`0xc3BbCd6FCce48E04edb5985FE869203768bbCccd`, see §1) returned `isError:true` — the Pharos
+      leg's `crossChainRep(address)` call reverted on-chain. Not a protocol/deploy issue (the MCP
+      call itself completed cleanly with a well-formed error payload) — most likely this address
+      simply has no Pharos-side record (it was only ever used for the X Layer deploy). Worth
+      re-checking with an address that has real Pharos history before recording the demo, so the
+      Pharos leg doesn't show an error on camera.
+- [x] **ASP registered — Agent ID #9485.** Name "KARMA Trust Oracle" (shortened from "KARMA
+      Cross-Chain Trust Oracle" — the marketplace's name field caps at 25 chars, the original was
+      30), free A2MCP service "Cross-Chain Trust Score Lookup", endpoint
+      `https://karma-trust-oracle.fly.dev`, fee `0`. Registered via `agent create` on wallet
+      `0x5645c91231e2fc118ab3d00bdf5351fc2922ef1e` (logged in via Google, email
+      gokuderafight@gmail.com). Tx: `0xeb93fcf2f276a75f948b969eea59ee53b429efb7553d763aa0705cc41ea7e1b4`.
+- [x] **Submitted for OKX review (26/7)** via `agent activate --agent-id 9485 --preferred-language
+      vi-VN` → `approvalStatus: 2` (under review). Result arrives within 24h by email
+      (gokuderafight@gmail.com) and in the Agent conversation window.
+- [ ] **This is the step that gates the whole submission.** Watch for the approval notice; if
+      rejected, fix and resubmit immediately rather than waiting. Not yet a valid hackathon
+      submission until approved and live on the marketplace.
 
 ## 4. Record the ≤90s demo and post to X
 
